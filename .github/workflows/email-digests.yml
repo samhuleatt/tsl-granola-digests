@@ -13,7 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && contains(toJson(github.event.head_commit.modified), 'pending/daily.json'))
+      (github.event_name == 'push' && (
+        contains(toJson(github.event.head_commit.modified), 'pending/daily.json') ||
+        contains(toJson(github.event.head_commit.added), 'pending/daily.json')
+      ))
 
     steps:
       - uses: actions/checkout@v4
