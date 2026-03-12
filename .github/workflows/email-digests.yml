@@ -1,40 +1,19 @@
-name: TSL Email Digests
+name: Email Digests
 
 on:
   push:
     paths:
-      - 'pending/daily.json'
-      - 'pending/weekly.json'
-  workflow_dispatch:
+      - "pending/daily.json"
+      - "pending/weekly.json"
 
 jobs:
   send-digest:
-    name: Send Digest
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Send daily digest
-        if: ${{ hashFiles('pending/daily.json') != '' }}
+      - name: Send digest email
+        run: node sendDigest.js
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-        run: |
-          echo "=== TSL Daily Digest — $(date -u '+%Y-%m-%d %H:%M UTC') ==="
-          npm run send-daily
-
-      - name: Send weekly digest
-        if: ${{ hashFiles('pending/weekly.json') != '' }}
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-        run: |
-          echo "=== TSL Weekly Digest — $(date -u '+%Y-%m-%d %H:%M UTC') ==="
-          npm run send-weekly
