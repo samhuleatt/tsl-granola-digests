@@ -1,0 +1,17 @@
+{
+  "name": "tsl-granola-digests",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "send-daily": "ts-node src/sendDailyDigest.ts",
+    "send-weekly": "ts-node src/sendWeeklyDigest.ts"
+  },
+  "dependencies": {
+    "resend": "^3.2.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.11.0"
+  }
+}

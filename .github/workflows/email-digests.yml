@@ -1,0 +1,58 @@
+name: TSL Email Digests
+
+on:
+  push:
+    paths:
+      - 'pending/daily.json'
+      - 'pending/weekly.json'
+  workflow_dispatch:
+
+jobs:
+  daily-digest:
+    name: Send Daily Digest
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && contains(toJson(github.event.head_commit.modified), 'pending/daily.json'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Send daily digest
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          echo "=== TSL Daily Digest — $(date -u '+%Y-%m-%d %H:%M UTC') ==="
+          npm run send-daily
+
+  weekly-digest:
+    name: Send Weekly Digest
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' && contains(toJson(github.event.head_commit.modified), 'pending/weekly.json')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Send weekly digest
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          echo "=== TSL Weekly Digest — $(date -u '+%Y-%m-%d %H:%M UTC') ==="
+          npm run send-weekly
