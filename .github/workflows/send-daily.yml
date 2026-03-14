@@ -1,0 +1,17 @@
+name: Send Daily Digest
+
+on:
+  push:
+    paths:
+      - "pending/daily.json"
+
+jobs:
+  send:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Send daily digest
+        run: node sendDigest.js daily
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
