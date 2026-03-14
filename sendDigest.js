@@ -1,12 +1,22 @@
 const fs = require('fs');
 
+// Accept explicit type argument (e.g. "node sendDigest.js weekly")
+// so the workflow can specify which file to send rather than always picking daily first.
+const arg = process.argv[2];
 let file, type;
-if (fs.existsSync('pending/daily.json')) {
+
+if (arg === 'weekly') {
+  file = 'pending/weekly.json';
+  type = 'weekly';
+} else if (arg === 'daily') {
   file = 'pending/daily.json';
   type = 'daily';
 } else if (fs.existsSync('pending/weekly.json')) {
   file = 'pending/weekly.json';
   type = 'weekly';
+} else if (fs.existsSync('pending/daily.json')) {
+  file = 'pending/daily.json';
+  type = 'daily';
 } else {
   console.error('No digest file found in pending/');
   process.exit(1);

@@ -13,7 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Determine digest type
+        id: digest-type
+        run: |
+          CHANGED=$(git diff HEAD~1 --name-only 2>/dev/null || echo "")
+          if echo "$CHANGED" | grep -q "pending/weekly.json"; then
+            echo "type=weekly" >> $GITHUB_OUTPUT
+          else
+            echo "type=daily" >> $GITHUB_OUTPUT
+          fi
+
       - name: Send digest email
-        run: node sendDigest.js
+        run: node sendDigest.js ${{ steps.digest-type.outputs.type }}
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
