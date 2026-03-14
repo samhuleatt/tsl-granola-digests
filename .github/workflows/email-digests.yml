@@ -8,7 +8,9 @@ on:
 
 jobs:
   send-daily:
-    if: contains(toJSON(github.event.commits), 'pending/daily.json')
+    if: |
+      contains(toJSON(github.event.commits), 'pending/daily.json') &&
+      !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +20,9 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
 
   send-weekly:
-    if: contains(toJSON(github.event.commits), 'pending/weekly.json')
+    if: |
+      contains(toJSON(github.event.commits), 'pending/weekly.json') &&
+      !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
