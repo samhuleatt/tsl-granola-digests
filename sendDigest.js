@@ -24,28 +24,40 @@ if (arg === 'weekly') {
 
 const payload = JSON.parse(fs.readFileSync(file, 'utf8'));
 
-console.log(`Sending ${type} digest email...`);
+console.log(`Sending ${type} digest: "${payload.subject}"`);
 
-fetch('https://api.resend.com/emails', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    from: 'TSL Digest <digest@mail.thesideletter.co>',
-    to: ['sam.huleatt@gmail.com', 'dav.j.zhou@gmail.com'],
-    subject: payload.subject,
-    html: payload.html
-  })
-}).then(async res => {
-  const body = await res.text();
-  if (!res.ok) {
-    console.error('Resend API error:', body);
-    process.exit(1);
+async function sendWithRetry(maxAttempts = 3) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`Attempt ${attempt}/${maxAttempts}...`);
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: 'TSL Digest <digest@mail.thesideletter.co>',
+          to: ['sam.huleatt@gmail.com', 'dav.j.zhou@gmail.com'],
+          subject: payload.subject,
+          html: payload.html
+        })
+      });
+      const body = await res.text();
+      if (!res.ok) throw new Error(`Resend API error (${res.status}): ${body}`);
+      console.log(`Digest sent successfully — ${body}`);
+      return;
+    } catch (err) {
+      console.error(`Attempt ${attempt} failed:`, err.message);
+      if (attempt < maxAttempts) {
+        console.log(`Retrying in 5s...`);
+        await new Promise(r => setTimeout(r, 5000));
+      } else {
+        console.error('All attempts failed.');
+        process.exit(1);
+      }
+    }
   }
-  console.log('Digest sent successfully');
-}).catch(err => {
-  console.error('Fetch error:', err);
-  process.exit(1);
-});
+}
+
+sendWithRetry();
