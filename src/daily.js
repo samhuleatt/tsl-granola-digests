@@ -3,15 +3,22 @@ import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
 
 async function fetchTasks() {
+  const pat = process.env.GH_PAT;
+  console.log(`[debug] GH_PAT present: ${!!pat}`);
+  const url = 'https://api.github.com/repos/samhuleatt/the-side-letter/contents/TASKS.md';
+  console.log(`[debug] Fetching TASKS.md: ${url}`);
   try {
-    const res = await fetch(
-      'https://api.github.com/repos/samhuleatt/the-side-letter/contents/TASKS.md',
-      { headers: { 'Authorization': `Bearer ${process.env.GH_PAT}` } }
-    );
-    if (!res.ok) return null;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${pat}` } });
+    console.log(`[debug] GitHub API status: ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const body = await res.text();
+      console.log(`[debug] GitHub API error body: ${body}`);
+      return null;
+    }
     const { content } = await res.json();
     return Buffer.from(content, 'base64').toString('utf8');
-  } catch {
+  } catch (err) {
+    console.log(`[debug] fetchTasks threw: ${err.message}`);
     return null;
   }
 }
@@ -35,7 +42,10 @@ async function main() {
   const meetings = await Promise.all(
     tslNotes.map(async note => {
       try {
-        return await fetchNoteDetail(note.id);
+        const detail = await fetchNoteDetail(note.id);
+        console.log(`[debug] Note ${note.id} top-level fields: ${Object.keys(detail).join(', ')}`);
+        console.log(`[debug] Note ${note.id} summary: ${JSON.stringify(detail.summary)?.slice(0, 200) ?? 'MISSING'}`);
+        return detail;
       } catch (err) {
         console.warn(`Failed to fetch detail for note ${note.id}: ${err.message}`);
         return note;
