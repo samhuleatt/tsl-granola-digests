@@ -44,7 +44,7 @@ async function main() {
       try {
         const detail = await fetchNoteDetail(note.id);
         console.log(`[debug] Note ${note.id} top-level fields: ${Object.keys(detail).join(', ')}`);
-        console.log(`[debug] Note ${note.id} summary: ${JSON.stringify(detail.summary)?.slice(0, 200) ?? 'MISSING'}`);
+        console.log(`[debug] Note ${note.id} summary_markdown: ${JSON.stringify(detail.summary_markdown)?.slice(0, 200) ?? 'MISSING'}`);
         return detail;
       } catch (err) {
         console.warn(`Failed to fetch detail for note ${note.id}: ${err.message}`);

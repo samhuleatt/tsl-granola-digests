@@ -13,7 +13,7 @@ function loadPrompt(name) {
 function buildMeetingsText(meetings) {
   if (!meetings.length) return 'No TSL meetings today.';
   return meetings.map(m => {
-    const summary = m.summary || '(no summary available)';
+    const summary = m.summary_markdown || '(no summary available)';
     return `## ${m.title}\n${summary}`;
   }).join('\n\n');
 }
