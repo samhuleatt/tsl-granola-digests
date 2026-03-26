@@ -6,7 +6,7 @@ async function fetchTasks() {
   try {
     const res = await fetch(
       'https://api.github.com/repos/samhuleatt/the-side-letter/contents/TASKS.md',
-      { headers: { 'Authorization': `Bearer ${process.env.GITHUB_TOKEN}` } }
+      { headers: { 'Authorization': `Bearer ${process.env.GH_PAT}` } }
     );
     if (!res.ok) return null;
     const { content } = await res.json();
