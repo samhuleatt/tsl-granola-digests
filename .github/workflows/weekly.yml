@@ -2,13 +2,22 @@ name: TSL Weekly Digest
 
 on:
   schedule:
-    - cron: '0 17 * * 6'    # noon ET Saturday (EST = UTC-5)
+    - cron: '0 16 * * 6'    # noon ET during EDT
+    - cron: '0 17 * * 6'    # noon ET during EST
   workflow_dispatch:
 
 jobs:
   digest:
     runs-on: ubuntu-latest
     steps:
+      - name: Skip wrong DST slot
+        if: github.event_name == 'schedule'
+        run: |
+          current_hour=$(TZ=America/New_York date +%H)
+          if [ "$current_hour" != "12" ]; then
+            echo "Not noon ET; skipping duplicate DST slot."
+            exit 0
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

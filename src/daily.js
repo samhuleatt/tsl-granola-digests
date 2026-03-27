@@ -1,6 +1,7 @@
 import { fetchTodaysMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
+import { formatDailyHeadingDate, formatDailySubjectDate } from './time.js';
 
 async function fetchTasks() {
   const pat = process.env.GH_PAT;
@@ -55,11 +56,12 @@ async function main() {
 
   // 5. Generate digest HTML via Claude
   console.log('Generating digest with Claude...');
-  const html = await generateDailyDigest({ meetings, tasks });
+  const today = new Date();
+  const heading = `TSL Daily — ${formatDailyHeadingDate(today)}`;
+  const html = await generateDailyDigest({ meetings, tasks, heading });
 
   // 6. Build subject and send
-  const today = new Date();
-  const dateStr = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const dateStr = formatDailySubjectDate(today);
   const subject = `TSL Daily — ${dateStr}`;
   console.log(`Subject: ${subject}`);
 

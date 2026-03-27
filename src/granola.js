@@ -1,3 +1,5 @@
+import { isDigestMonday } from './time.js';
+
 const BASE_URL = 'https://public-api.granola.ai/v1';
 
 async function granolaGet(path) {
@@ -28,7 +30,7 @@ async function fetchNotes(createdAfter) {
 
 export async function fetchTodaysMeetings() {
   const now = new Date();
-  const isMonday = now.getDay() === 1;
+  const isMonday = isDigestMonday(now);
   const hoursBack = isMonday ? 72 : 24;
   const since = new Date(now.getTime() - hoursBack * 60 * 60 * 1000);
   return fetchNotes(since);

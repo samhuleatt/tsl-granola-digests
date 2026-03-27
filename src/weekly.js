@@ -1,6 +1,7 @@
 import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateWeeklyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
+import { formatWeekendRoundupDate } from './time.js';
 
 async function fetchTasks() {
   try {
@@ -45,14 +46,13 @@ async function main() {
 
   // 5. Generate digest HTML via Claude
   console.log('Generating weekly digest with Claude...');
-  const html = await generateWeeklyDigest({ meetings, tasks });
+  const today = new Date();
+  const roundupDate = formatWeekendRoundupDate(today);
+  const heading = `TSL Weekend Roundup — ${roundupDate}`;
+  const html = await generateWeeklyDigest({ meetings, tasks, rangeLabel: heading });
 
   // 6. Build subject and send
-  const today = new Date();
-  const weekEnd = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-  const weekStart = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000)
-    .toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-  const subject = `TSL Weekly — ${weekStart}–${weekEnd}`;
+  const subject = heading;
   console.log(`Subject: ${subject}`);
 
   await sendEmail({ subject, html });

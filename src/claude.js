@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { buildMeetingSourceLine } from './time.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const client = new Anthropic();
@@ -28,18 +29,70 @@ async function generate(systemPrompt, userMessage) {
   return msg.content[0].text;
 }
 
-export async function generateDailyDigest({ meetings, tasks }) {
+function escapeHtml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function wrapDailyHtml(body, heading, sourceLine) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="font-family: Georgia, serif; max-width: 640px; margin: 0 auto; padding: 24px; color: #1a1a1a; font-size: 15px; line-height: 1.6;">
+<h1 style="font-size: 20px; font-weight: bold; border-bottom: 2px solid #1a1a1a; padding-bottom: 8px; margin-bottom: 20px;">${escapeHtml(heading)}</h1>
+${body}
+<hr style="border: none; border-top: 1px solid #ddd; margin: 28px 0 16px 0;">
+<p style="color: #aaa; font-size: 12px; margin: 0;">${escapeHtml(sourceLine)}</p>
+</body>
+</html>`;
+}
+
+function wrapWeeklyHtml(body, rangeLabel, sourceLine) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="font-family:Georgia,serif;max-width:620px;margin:0 auto;padding:24px;color:#1a1a1a;">
+<p style="font-size:13px;color:#888;margin:0 0 4px 0;">TSL Internal</p>
+<h1 style="font-size:22px;font-weight:bold;margin:0 0 4px 0;">TSL Weekend Roundup</h1>
+<p style="font-size:14px;color:#555;margin:0 0 24px 0;">${escapeHtml(rangeLabel)} &nbsp;·&nbsp; For Sam & David</p>
+<hr style="border:none;border-top:1px solid #e0e0e0;margin:0 0 24px 0;">
+${body}
+<hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0 16px 0;">
+<p style="font-size:12px;color:#999;margin:0;">${escapeHtml(sourceLine)}</p>
+</body></html>`;
+}
+
+export async function generateDailyDigest({ meetings, tasks, heading }) {
   const system = loadPrompt('daily');
   const meetingsText = buildMeetingsText(meetings);
   const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
-  const user = `${meetingsText}\n\n${tasksText}`;
-  return generate(system, user);
+  const user = [
+    `Digest heading: ${heading}`,
+    `Source line: ${buildMeetingSourceLine(meetings)}`,
+    '',
+    meetingsText,
+    '',
+    tasksText
+  ].join('\n');
+  const body = await generate(system, user);
+  return wrapDailyHtml(body, heading, buildMeetingSourceLine(meetings));
 }
 
-export async function generateWeeklyDigest({ meetings, tasks }) {
+export async function generateWeeklyDigest({ meetings, tasks, rangeLabel }) {
   const system = loadPrompt('weekly');
   const meetingsText = buildMeetingsText(meetings);
   const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
-  const user = `${meetingsText}\n\n${tasksText}`;
-  return generate(system, user);
+  const user = [
+    `Week label: ${rangeLabel}`,
+    `Source line: ${buildMeetingSourceLine(meetings)}`,
+    '',
+    meetingsText,
+    '',
+    tasksText
+  ].join('\n');
+  const body = await generate(system, user);
+  return wrapWeeklyHtml(body, rangeLabel, buildMeetingSourceLine(meetings));
 }
