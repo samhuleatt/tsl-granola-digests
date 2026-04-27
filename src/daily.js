@@ -1,7 +1,8 @@
-import { fetchTodaysMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
+import { fetchLatestSamUpdate, fetchTodaysMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
-import { formatDailyHeadingDate, formatDailySubjectDate } from './time.js';
+import { saveDailyDigest } from './supabase.js';
+import { formatDailyHeadingDate, formatDailyStorageDate, formatDailySubjectDate, getDigestHour, isDigestSendHour } from './time.js';
 
 async function fetchTasks() {
   const pat = process.env.GH_PAT;
@@ -25,21 +26,31 @@ async function fetchTasks() {
 }
 
 async function main() {
+  if (process.env.REQUIRE_DIGEST_HOUR === 'true' && !isDigestSendHour()) {
+    console.log(`Skipping daily digest because it is ${getDigestHour()}:00 ET, not 21:00 ET.`);
+    return;
+  }
+
   // 1. Fetch today's notes from Granola
   console.log('Fetching today\'s meetings from Granola...');
   const allNotes = await fetchTodaysMeetings();
   console.log(`Fetched ${allNotes.length} notes total`);
 
-  // 2. Filter to TSL-relevant
+  // 2. Filter to TSL-relevant meeting context
   const tslNotes = filterTSLMeetings(allNotes);
   console.log(`${tslNotes.length} TSL-relevant meetings`);
 
-  // 3. Fetch TASKS.md (skip silently on failure)
+  // 3. Fetch Sam's optional daily status update
+  console.log('Fetching latest #samsupdate note...');
+  const samUpdate = await fetchLatestSamUpdate();
+  console.log(samUpdate ? `Found #samsupdate: ${samUpdate.title || samUpdate.id}` : 'No #samsupdate note found today');
+
+  // 4. Fetch TASKS.md (skip silently on failure)
   console.log('Fetching TASKS.md...');
   const tasks = await fetchTasks();
   if (!tasks) console.log('TASKS.md unavailable — continuing without it');
 
-  // 4. Fetch full note detail for each TSL meeting
+  // 5. Fetch full note detail for each TSL meeting
   const meetings = await Promise.all(
     tslNotes.map(async note => {
       try {
@@ -54,16 +65,22 @@ async function main() {
     })
   );
 
-  // 5. Generate digest HTML via Claude
+  // 6. Generate digest HTML via Claude
   console.log('Generating digest with Claude...');
   const today = new Date();
   const heading = `TSL Daily — ${formatDailyHeadingDate(today)}`;
-  const html = await generateDailyDigest({ meetings, tasks, heading });
+  const html = await generateDailyDigest({ meetings, tasks, samUpdate, heading });
 
-  // 6. Build subject and send
+  // 7. Build subject and send
   const dateStr = formatDailySubjectDate(today);
   const subject = `TSL Daily — ${dateStr}`;
   console.log(`Subject: ${subject}`);
+
+  await saveDailyDigest({
+    digestDate: formatDailyStorageDate(today),
+    subject,
+    html
+  });
 
   await sendEmail({ subject, html });
   console.log('Daily digest sent successfully');

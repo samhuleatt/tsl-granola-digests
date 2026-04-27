@@ -7,12 +7,55 @@ function formatInTimeZone(date, options) {
   }).format(date);
 }
 
+function getTimeZoneOffset(date = new Date()) {
+  const timeZoneName = new Intl.DateTimeFormat('en-US', {
+    timeZone: DIGEST_TIME_ZONE,
+    timeZoneName: 'shortOffset'
+  })
+    .formatToParts(date)
+    .find(part => part.type === 'timeZoneName')?.value;
+
+  const match = timeZoneName?.match(/^GMT([+-])(\d{1,2})(?::(\d{2}))?$/);
+  if (!match) return '-05:00';
+
+  const [, sign, hour, minute = '00'] = match;
+  return `${sign}${hour.padStart(2, '0')}:${minute}`;
+}
+
 export function getDigestWeekday(date = new Date()) {
   return formatInTimeZone(date, { weekday: 'long' });
 }
 
 export function isDigestMonday(date = new Date()) {
   return getDigestWeekday(date) === 'Monday';
+}
+
+export function getDigestHour(date = new Date()) {
+  return Number(formatInTimeZone(date, {
+    hour: 'numeric',
+    hour12: false
+  }));
+}
+
+export function isDigestSendHour(date = new Date()) {
+  return getDigestHour(date) === 21;
+}
+
+export function getStartOfToday(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DIGEST_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
+  );
+
+  return new Date(`${values.year}-${values.month}-${values.day}T00:00:00${getTimeZoneOffset(date)}`);
 }
 
 export function formatDailyHeadingDate(date = new Date()) {
@@ -29,6 +72,23 @@ export function formatDailySubjectDate(date = new Date()) {
     month: 'long',
     day: 'numeric'
   });
+}
+
+export function formatDailyStorageDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: DIGEST_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 export function formatShortDigestDate(date) {

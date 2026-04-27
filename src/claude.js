@@ -19,6 +19,33 @@ function buildMeetingsText(meetings) {
   }).join('\n\n');
 }
 
+function buildSamUpdateText(samUpdate) {
+  if (!samUpdate) return 'No #samsupdate note found today. Use last known state and other context without making the absence dramatic.';
+
+  const summary =
+    samUpdate.summary_markdown ||
+    samUpdate.summary ||
+    samUpdate.body_markdown ||
+    samUpdate.body ||
+    samUpdate.content ||
+    samUpdate.notes ||
+    samUpdate.markdown ||
+    samUpdate.text ||
+    '(no body available)';
+
+  return `## ${samUpdate.title || 'Sam daily status update'}\n${summary}`;
+}
+
+function buildDailySourceLine(meetings, samUpdate) {
+  const meetingSourceLine = buildMeetingSourceLine(meetings);
+  if (!samUpdate) return meetingSourceLine;
+
+  const samSource = `Sam update: ${samUpdate.title || 'Untitled #samsupdate note'}`;
+  if (!meetings.length) return `Sources: ${samSource}`;
+
+  return meetingSourceLine.replace('Sources: ', `Sources: ${samSource} | `);
+}
+
 async function generate(systemPrompt, userMessage) {
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -65,20 +92,27 @@ ${body}
 </body></html>`;
 }
 
-export async function generateDailyDigest({ meetings, tasks, heading }) {
+export async function generateDailyDigest({ meetings, tasks, samUpdate, heading }) {
   const system = loadPrompt('daily');
   const meetingsText = buildMeetingsText(meetings);
+  const samUpdateText = buildSamUpdateText(samUpdate);
   const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
+  const sourceLine = buildDailySourceLine(meetings, samUpdate);
   const user = [
     `Digest heading: ${heading}`,
-    `Source line: ${buildMeetingSourceLine(meetings)}`,
+    `Source line: ${sourceLine}`,
     '',
+    '# Sam optional daily Granola status note',
+    samUpdateText,
+    '',
+    '# TSL meetings from the current window',
     meetingsText,
     '',
+    '# Product/task context',
     tasksText
   ].join('\n');
   const body = await generate(system, user);
-  return wrapDailyHtml(body, heading, buildMeetingSourceLine(meetings));
+  return wrapDailyHtml(body, heading, sourceLine);
 }
 
 export async function generateWeeklyDigest({ meetings, tasks, rangeLabel }) {

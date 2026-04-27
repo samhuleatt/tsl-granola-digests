@@ -1,4 +1,4 @@
-import { isDigestMonday } from './time.js';
+import { getStartOfToday, isDigestMonday } from './time.js';
 
 const BASE_URL = 'https://public-api.granola.ai/v1';
 
@@ -36,6 +36,10 @@ export async function fetchTodaysMeetings() {
   return fetchNotes(since);
 }
 
+export async function fetchTodaysNotes() {
+  return fetchNotes(getStartOfToday());
+}
+
 export async function fetchWeeksMeetings() {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   return fetchNotes(since);
@@ -58,4 +62,51 @@ export function filterTSLMeetings(notes) {
 
 export async function fetchNoteDetail(id) {
   return granolaGet(`/notes/${id}`);
+}
+
+function noteText(note) {
+  return [
+    note.summary,
+    note.summary_markdown,
+    note.body,
+    note.body_markdown,
+    note.content,
+    note.notes,
+    note.markdown,
+    note.text,
+    note.transcript
+  ]
+    .filter(Boolean)
+    .map(value => typeof value === 'string' ? value : JSON.stringify(value))
+    .join('\n')
+    .toLowerCase();
+}
+
+function noteTimestamp(note) {
+  const value =
+    note.meeting_start_at ||
+    note.started_at ||
+    note.start_time ||
+    note.created_at ||
+    note.createdAt ||
+    note.date;
+  const timestamp = value ? new Date(value).getTime() : 0;
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+export async function fetchLatestSamUpdate() {
+  const notes = await fetchTodaysNotes();
+  const details = await Promise.all(
+    notes.map(async note => {
+      try {
+        return await fetchNoteDetail(note.id);
+      } catch {
+        return note;
+      }
+    })
+  );
+
+  return details
+    .filter(note => noteText(note).includes('#samsupdate'))
+    .sort((a, b) => noteTimestamp(b) - noteTimestamp(a))[0] || null;
 }
