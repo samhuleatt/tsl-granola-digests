@@ -56,6 +56,35 @@ async function generate(systemPrompt, userMessage) {
   return msg.content[0].text;
 }
 
+function textOnly(html) {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function validateDailyDigestBody(body) {
+  const text = textOnly(body);
+  const oldSections = [
+    'Meetings',
+    'Open Tasks',
+    'Suggested Priorities for Tomorrow'
+  ];
+  const leakedOldSection = oldSections.find(section => new RegExp(`\\b${section}\\b`, 'i').test(text));
+
+  if (leakedOldSection) {
+    throw new Error(`Daily digest used old section "${leakedOldSection}" instead of the Product / Services operating memo.`);
+  }
+
+  if (!/\bPRODUCT\s*\(Sam\)/i.test(text)) {
+    throw new Error('Daily digest is missing PRODUCT (Sam).');
+  }
+
+  if (!/\bSERVICES\s*\/\s*GTM\s*\(David\)/i.test(text)) {
+    throw new Error('Daily digest is missing SERVICES / GTM (David).');
+  }
+}
+
 function escapeHtml(value) {
   return value
     .replaceAll('&', '&amp;')
@@ -112,6 +141,7 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, heading 
     tasksText
   ].join('\n');
   const body = await generate(system, user);
+  validateDailyDigestBody(body);
   return wrapDailyHtml(body, heading, sourceLine);
 }
 
