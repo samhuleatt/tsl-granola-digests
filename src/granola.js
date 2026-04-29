@@ -66,6 +66,7 @@ export async function fetchNoteDetail(id) {
 
 function noteText(note) {
   return [
+    note.title,
     note.summary,
     note.summary_markdown,
     note.body,

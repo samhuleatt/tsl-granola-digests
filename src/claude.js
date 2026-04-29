@@ -63,6 +63,101 @@ function textOnly(html) {
     .trim();
 }
 
+function extractJson(text) {
+  const trimmed = text.trim();
+  const withoutFence = trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+  const start = withoutFence.indexOf('{');
+  const end = withoutFence.lastIndexOf('}');
+
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error('Daily digest response did not contain JSON.');
+  }
+
+  return JSON.parse(withoutFence.slice(start, end + 1));
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value.filter(Boolean) : [];
+}
+
+function asText(value, fallback = '') {
+  if (value === null || value === undefined) return fallback;
+  return String(value).trim() || fallback;
+}
+
+function percentText(value) {
+  const number = Number(String(value).replace('%', ''));
+  if (!Number.isFinite(number)) return '0%';
+  return `${Math.max(0, Math.min(100, Math.round(number)))}%`;
+}
+
+function renderBullets(items, fallback) {
+  const values = asArray(items);
+  if (!values.length) {
+    return `<ul style="margin: 0 0 14px 20px; padding: 0;"><li style="margin: 0 0 10px 0;">${escapeHtml(fallback)}</li></ul>`;
+  }
+
+  return `<ul style="margin: 0 0 14px 20px; padding: 0;">${values
+    .map(item => `<li style="margin: 0 0 10px 0;">${escapeHtml(asText(item))}</li>`)
+    .join('')}</ul>`;
+}
+
+function renderWorkflows(workflows) {
+  const values = asArray(workflows);
+  if (!values.length) {
+    return renderBullets(['No active product workflow moved today.'], 'No active product workflow moved today.');
+  }
+
+  return `<ul style="margin: 0 0 14px 20px; padding: 0;">${values
+    .map(workflow => {
+      const name = escapeHtml(asText(workflow.name, 'Unnamed workflow'));
+      const percent = percentText(workflow.percent);
+      const done = escapeHtml(asText(workflow.done, 'Done state needs definition.'));
+      const inFlight = escapeHtml(asText(workflow.inFlight, 'No active work called out today.'));
+      const gap = escapeHtml(asText(workflow.gap, 'No explicit gap.'));
+      return `<li style="margin: 0 0 10px 0;"><strong>${name} (${percent} complete)</strong> — ${done}<br>In flight: ${inFlight}<br>Gap: ${gap}</li>`;
+    })
+    .join('')}</ul>`;
+}
+
+function renderDailyDigestBody(digest) {
+  const product = digest.product || {};
+  const services = digest.services || {};
+  const biggestUnblock = asText(product.biggestUnblock);
+
+  return `<div style="font-family: Georgia, serif; font-size: 15px; line-height: 1.6;">
+  <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 24px 0 10px 0;">═══════════════════════════════════════════</p>
+  <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #333; margin: 0 0 12px 0;">PRODUCT (Sam)</h2>
+  <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 0 0 18px 0;">═══════════════════════════════════════════</p>
+
+  <h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0;">Key Workflows</h3>
+  ${renderWorkflows(product.workflows)}
+
+  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Needs Discussion</h3>
+  ${renderBullets(product.needsDiscussion, 'None urgent today.')}
+
+  ${biggestUnblock ? `<p style="margin: 16px 0 0 0;"><strong>Biggest unblock:</strong> ${escapeHtml(biggestUnblock)}</p>` : ''}
+
+  <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 28px 0 10px 0;">═══════════════════════════════════════════</p>
+  <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #333; margin: 0 0 12px 0;">SERVICES / GTM (David)</h2>
+  <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 0 0 18px 0;">═══════════════════════════════════════════</p>
+
+  <p style="margin: 0 0 16px 0;"><strong>Goal:</strong> $10K in services revenue by end of May.</p>
+
+  <h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0;">Active Engagements</h3>
+  ${renderBullets(services.activeEngagements, 'No active external engagement moved today.')}
+
+  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Diligence Packages</h3>
+  ${renderBullets(services.diligencePackages, 'No diligence package movement today.')}
+
+  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Needs Discussion</h3>
+  ${renderBullets(services.needsDiscussion, 'None urgent today.')}
+</div>`;
+}
+
 export function validateDailyDigestBody(body) {
   const text = textOnly(body);
   const oldSections = [
@@ -140,7 +235,8 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, heading 
     '# Product/task context',
     tasksText
   ].join('\n');
-  const body = await generate(system, user);
+  const digest = extractJson(await generate(system, user));
+  const body = renderDailyDigestBody(digest);
   validateDailyDigestBody(body);
   return wrapDailyHtml(body, heading, sourceLine);
 }
