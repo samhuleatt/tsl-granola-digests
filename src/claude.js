@@ -63,6 +63,43 @@ function textOnly(html) {
     .trim();
 }
 
+function extractSectionText(text, startPattern, endPattern) {
+  const start = text.search(startPattern);
+  if (start === -1) return '';
+  const rest = text.slice(start);
+  const end = rest.slice(1).search(endPattern);
+  return end === -1 ? rest : rest.slice(0, end + 1);
+}
+
+function compactLine(value, maxLength = 900) {
+  const text = asText(value).replace(/\s+/g, ' ');
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1).trim()}…`;
+}
+
+export function buildPriorDigestContext(priorDigests = []) {
+  const values = asArray(priorDigests);
+  if (!values.length) {
+    return 'No prior daily digest history available.';
+  }
+
+  return values.map(digest => {
+    const text = textOnly(asText(digest.html));
+    const services = extractSectionText(
+      text,
+      /\bSERVICES\s*\/\s*GTM\s*\(David\)/i,
+      /\bPRODUCT\s*\(Sam\)/i
+    );
+
+    return [
+      `## ${digest.digest_date || digest.subject || 'Prior digest'}`,
+      services
+        ? compactLine(services, 1400)
+        : 'No Services / GTM section captured in this prior digest.'
+    ].join('\n');
+  }).join('\n\n');
+}
+
 function extractJson(text) {
   const trimmed = text.trim();
   const withoutFence = trimmed
@@ -123,6 +160,43 @@ function renderWorkflows(workflows) {
     .join('')}</ul>`;
 }
 
+function servicesHasContent(services) {
+  return asArray(services.activeEngagements).length ||
+    asArray(services.diligencePackages).length ||
+    asArray(services.needsDiscussion).length;
+}
+
+function latestPriorServicesDigest(priorDigests = []) {
+  const [latest] = asArray(priorDigests);
+  if (!latest) return '';
+  const text = textOnly(asText(latest.html));
+  return extractSectionText(
+    text,
+    /\bSERVICES\s*\/\s*GTM\s*\(David\)/i,
+    /\bPRODUCT\s*\(Sam\)/i
+  );
+}
+
+function normalizeDailyDigest(digest, priorDigests = []) {
+  const normalized = {
+    product: digest.product || {},
+    services: digest.services || {}
+  };
+
+  if (!servicesHasContent(normalized.services)) {
+    const priorServices = latestPriorServicesDigest(priorDigests);
+    normalized.services = {
+      activeEngagements: priorServices
+        ? [`Carry forward from prior Services / GTM state — ${compactLine(priorServices, 500)}`]
+        : [],
+      diligencePackages: [],
+      needsDiscussion: []
+    };
+  }
+
+  return normalized;
+}
+
 function renderDailyDigestBody(digest) {
   const product = digest.product || {};
   const services = digest.services || {};
@@ -148,10 +222,10 @@ function renderDailyDigestBody(digest) {
   <p style="margin: 0 0 16px 0;"><strong>Goal:</strong> $10K in services revenue by end of May.</p>
 
   <h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0;">Active Engagements</h3>
-  ${renderBullets(services.activeEngagements, 'No active external engagement moved today.')}
+  ${renderBullets(services.activeEngagements, 'No prior services state available.')}
 
   <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Diligence Packages</h3>
-  ${renderBullets(services.diligencePackages, 'No diligence package movement today.')}
+  ${renderBullets(services.diligencePackages, 'No prior diligence package state available.')}
 
   <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Needs Discussion</h3>
   ${renderBullets(services.needsDiscussion, 'None urgent today.')}
@@ -177,6 +251,23 @@ export function validateDailyDigestBody(body) {
 
   if (!/\bSERVICES\s*\/\s*GTM\s*\(David\)/i.test(text)) {
     throw new Error('Daily digest is missing SERVICES / GTM (David).');
+  }
+
+  const bannedPhrases = [
+    /\bSupply Loop\b/i,
+    /\bDemand Loop\b/i,
+    /\bPR\s*#?\d+\b/i,
+    /\bpull request\s*#?\d+\b/i,
+    /\b(?:src|app|components|routes|pages|supabase|api)\/[A-Za-z0-9_.\/-]+/i,
+    /\b\/dashboard\/[A-Za-z0-9_/-]+/i,
+    /\bNo active external engagement moved today\b/i,
+    /\bNo diligence package movement today\b/i,
+    /\bNo #samsupdate note found\b/i
+  ];
+
+  const leakedPhrase = bannedPhrases.find(pattern => pattern.test(text));
+  if (leakedPhrase) {
+    throw new Error(`Daily digest leaked a banned implementation or fallback phrase: ${leakedPhrase}`);
   }
 }
 
@@ -216,11 +307,12 @@ ${body}
 </body></html>`;
 }
 
-export async function generateDailyDigest({ meetings, tasks, samUpdate, heading }) {
+export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDigests = [], heading }) {
   const system = loadPrompt('daily');
   const meetingsText = buildMeetingsText(meetings);
   const samUpdateText = buildSamUpdateText(samUpdate);
   const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
+  const priorDigestText = buildPriorDigestContext(priorDigests);
   const sourceLine = buildDailySourceLine(meetings, samUpdate);
   const user = [
     `Digest heading: ${heading}`,
@@ -233,9 +325,12 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, heading 
     meetingsText,
     '',
     '# Product/task context',
-    tasksText
+    tasksText,
+    '',
+    '# Recent prior daily digest history',
+    priorDigestText
   ].join('\n');
-  const digest = extractJson(await generate(system, user));
+  const digest = normalizeDailyDigest(extractJson(await generate(system, user)), priorDigests);
   const body = renderDailyDigestBody(digest);
   validateDailyDigestBody(body);
   return wrapDailyHtml(body, heading, sourceLine);

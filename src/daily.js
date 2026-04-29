@@ -1,7 +1,7 @@
 import { fetchLatestSamUpdate, fetchTodaysMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
-import { saveDailyDigest } from './supabase.js';
+import { fetchRecentDailyDigests, saveDailyDigest } from './supabase.js';
 import { formatDailyHeadingDate, formatDailyStorageDate, formatDailySubjectDate, getDigestHour, isDigestSendHour } from './time.js';
 
 async function fetchTasks() {
@@ -68,8 +68,13 @@ async function main() {
   // 6. Generate digest HTML via Claude
   console.log('Generating digest with Claude...');
   const today = new Date();
+  const digestDate = formatDailyStorageDate(today);
+  console.log('Fetching recent daily digest history...');
+  const priorDigests = await fetchRecentDailyDigests({ beforeDate: digestDate, limit: 5 });
+  console.log(`Fetched ${priorDigests.length} prior digests`);
+
   const heading = `TSL Daily — ${formatDailyHeadingDate(today)}`;
-  const html = await generateDailyDigest({ meetings, tasks, samUpdate, heading });
+  const html = await generateDailyDigest({ meetings, tasks, samUpdate, priorDigests, heading });
 
   // 7. Build subject and send
   const dateStr = formatDailySubjectDate(today);
@@ -77,7 +82,7 @@ async function main() {
   console.log(`Subject: ${subject}`);
 
   await saveDailyDigest({
-    digestDate: formatDailyStorageDate(today),
+    digestDate,
     subject,
     html
   });
