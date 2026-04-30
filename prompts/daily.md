@@ -12,6 +12,7 @@ You will be given:
 - TSL-relevant meeting notes from the current window
 - Current TASKS.md context, if available
 - Recent prior daily digest history for Services / GTM carry-forward
+- Product-level TASKS.md context. This may have already been filtered to remove engineering implementation residue.
 
 Return only valid JSON. Do not return HTML. Do not return Markdown. Do not wrap the JSON in code fences.
 
@@ -67,6 +68,7 @@ Return only valid JSON. Do not return HTML. Do not return Markdown. Do not wrap 
 ## Language constraints
 
 - Never mention PR numbers, file paths, route names, database columns, code objects, internal scripts, or engineering task residue.
+- If source material contains an "implementation note" or "implementation file" placeholder, treat it only as weak evidence that work happened. Do not repeat the placeholder in the digest.
 - Do not write bloated multi-clause sentences. Prefer one clear sentence per line.
 - Product workflow names should be user/business concepts, not page or implementation names.
 - The "done" line should describe the user outcome. The "inFlight" line should name the live work. The "gap" line should name the decision, dependency, or missing product capability.

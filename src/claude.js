@@ -6,6 +6,7 @@ import { buildMeetingSourceLine } from './time.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const client = new Anthropic();
+const DAILY_GENERATION_ATTEMPTS = 3;
 
 function loadPrompt(name) {
   return readFileSync(join(__dirname, '..', 'prompts', `${name}.md`), 'utf8');
@@ -20,7 +21,7 @@ function buildMeetingsText(meetings) {
 }
 
 function buildSamUpdateText(samUpdate) {
-  if (!samUpdate) return 'No #samsupdate note found today. Use last known state and other context without making the absence dramatic.';
+  if (!samUpdate) return 'No optional Sam update is available. Use last known state and other context without mentioning this absence.';
 
   const summary =
     samUpdate.summary_markdown ||
@@ -34,6 +35,28 @@ function buildSamUpdateText(samUpdate) {
     '(no body available)';
 
   return `## ${samUpdate.title || 'Sam daily status update'}\n${summary}`;
+}
+
+export function sanitizeDigestSourceText(value) {
+  return asText(value)
+    .split('\n')
+    .map(line => line
+      .replace(/\bPR\s*#?\d+\b/gi, 'implementation note')
+      .replace(/\bpull request\s*#?\d+\b/gi, 'implementation note')
+      .replace(/\b(?:src|app|components|routes|pages|supabase|api)\/[A-Za-z0-9_.\/-]+/gi, 'the codebase')
+      .replace(/\/dashboard\/[A-Za-z0-9_/-]+/gi, 'the app')
+      .replace(/\b[A-Za-z0-9_.-]+\.(?:js|jsx|ts|tsx|sql|md|json|yml|yaml)\b/g, 'implementation file'))
+    .filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      const engineeringOnly =
+        /\b(commit|merged|branch|diff|migration|refactor|lint|test suite|typescript|eslint)\b/i.test(trimmed) &&
+        !/\b(LP|fund|funds|allocator|David|Sam|Charlotte|Rajesh|services|GTM|diligence|package|buyer|launch|sale|TSL20)\b/i.test(trimmed);
+      return !engineeringOnly;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function buildDailySourceLine(meetings, samUpdate) {
@@ -54,6 +77,37 @@ async function generate(systemPrompt, userMessage) {
     messages: [{ role: 'user', content: userMessage }]
   });
   return msg.content[0].text;
+}
+
+async function generateValidatedDailyDigest(system, user, priorDigests) {
+  const validationNotes = [];
+
+  for (let attempt = 1; attempt <= DAILY_GENERATION_ATTEMPTS; attempt++) {
+    const retryInstruction = validationNotes.length
+      ? [
+          '',
+          '# Previous draft failed validation',
+          ...validationNotes.map(note => `- ${note}`),
+          'Regenerate from the same source material. Remove the violation while preserving the Product / Services operating memo shape.'
+        ].join('\n')
+      : '';
+
+    const digest = normalizeDailyDigest(
+      extractJson(await generate(system, `${user}${retryInstruction}`)),
+      priorDigests
+    );
+    const body = renderDailyDigestBody(digest);
+
+    try {
+      validateDailyDigestBody(body);
+      return body;
+    } catch (err) {
+      validationNotes.push(err.message);
+      console.warn(`Daily digest draft ${attempt}/${DAILY_GENERATION_ATTEMPTS} failed validation: ${err.message}`);
+    }
+  }
+
+  throw new Error(`Daily digest failed validation after ${DAILY_GENERATION_ATTEMPTS} attempts: ${validationNotes.at(-1)}`);
 }
 
 function textOnly(html) {
@@ -259,7 +313,7 @@ export function validateDailyDigestBody(body) {
     /\bPR\s*#?\d+\b/i,
     /\bpull request\s*#?\d+\b/i,
     /\b(?:src|app|components|routes|pages|supabase|api)\/[A-Za-z0-9_.\/-]+/i,
-    /\b\/dashboard\/[A-Za-z0-9_/-]+/i,
+    /\/dashboard\/[A-Za-z0-9_/-]+/i,
     /\bNo active external engagement moved today\b/i,
     /\bNo diligence package movement today\b/i,
     /\bNo #samsupdate note found\b/i
@@ -311,7 +365,8 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDig
   const system = loadPrompt('daily');
   const meetingsText = buildMeetingsText(meetings);
   const samUpdateText = buildSamUpdateText(samUpdate);
-  const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
+  const sanitizedTasks = sanitizeDigestSourceText(tasks);
+  const tasksText = sanitizedTasks ? `## TASKS.md\n${sanitizedTasks}` : '(No product-level TASKS.md context available)';
   const priorDigestText = buildPriorDigestContext(priorDigests);
   const sourceLine = buildDailySourceLine(meetings, samUpdate);
   const user = [
@@ -330,9 +385,7 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDig
     '# Recent prior daily digest history',
     priorDigestText
   ].join('\n');
-  const digest = normalizeDailyDigest(extractJson(await generate(system, user)), priorDigests);
-  const body = renderDailyDigestBody(digest);
-  validateDailyDigestBody(body);
+  const body = await generateValidatedDailyDigest(system, user, priorDigests);
   return wrapDailyHtml(body, heading, sourceLine);
 }
 

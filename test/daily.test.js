@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPriorDigestContext, validateDailyDigestBody } from '../src/claude.js';
+import { buildPriorDigestContext, sanitizeDigestSourceText, validateDailyDigestBody } from '../src/claude.js';
 
 test('buildPriorDigestContext extracts prior Services state', () => {
   const context = buildPriorDigestContext([
@@ -54,4 +54,18 @@ test('validateDailyDigestBody accepts concise operating memo language', () => {
     <h2>SERVICES / GTM (David)</h2>
     <p>Rajesh — carry forward prior diligence package status; next step is scope confirmation.</p>
   `));
+});
+
+test('sanitizeDigestSourceText removes engineering residue before prompting', () => {
+  const sanitized = sanitizeDigestSourceText(`
+    Funds Page: list management UI so Sam can share TSL20 with David.
+    PR #123 changed src/daily.js and /dashboard/funds.
+    Refactor api/routes for lint cleanup.
+  `);
+
+  assert.match(sanitized, /TSL20/);
+  assert.doesNotMatch(sanitized, /PR #123/);
+  assert.doesNotMatch(sanitized, /src\/daily\.js/);
+  assert.doesNotMatch(sanitized, /\/dashboard\/funds/);
+  assert.doesNotMatch(sanitized, /lint cleanup/);
 });

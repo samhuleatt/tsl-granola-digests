@@ -15,6 +15,7 @@ jobs:
         with:
           node-version: '20'
       - run: npm install
+      - run: npm test
       - run: node src/daily.js
         env:
           GRANOLA_API_KEY: ${{ secrets.GRANOLA_API_KEY }}
