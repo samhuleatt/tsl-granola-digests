@@ -69,3 +69,42 @@ test('sanitizeDigestSourceText removes engineering residue before prompting', ()
   assert.doesNotMatch(sanitized, /\/dashboard\/funds/);
   assert.doesNotMatch(sanitized, /lint cleanup/);
 });
+
+test('validateDailyDigestBody rejects the regressed technical digest style', () => {
+  assert.throws(
+    () => validateDailyDigestBody(`
+      <h2>PRODUCT (Sam)</h2>
+      <ul>
+        <li><strong>Pitch Deck Triage (72% complete)</strong> — LP drops a deck, gets a structured oracle read with identity resolution, and the result enriches the fund record persistently.<br>In flight: T-Triage-2 shipped; next is canonical fields with manual locks.<br>Gap: Admin review queue is blocked.</li>
+      </ul>
+      <h2>SERVICES / GTM (David)</h2>
+      <p>Rajesh — current status.</p>
+    `),
+    /banned/
+  );
+
+  assert.throws(
+    () => validateDailyDigestBody(`
+      <h2>PRODUCT (Sam)</h2>
+      <ul>
+        <li><strong>A (10% complete)</strong> — LP gets value.<br>In flight: One.</li>
+        <li><strong>B (20% complete)</strong> — LP gets value.<br>In flight: Two.</li>
+        <li><strong>C (30% complete)</strong> — LP gets value.<br>In flight: Three.</li>
+        <li><strong>D (40% complete)</strong> — LP gets value.<br>In flight: Four.</li>
+      </ul>
+      <h2>SERVICES / GTM (David)</h2>
+      <p>Rajesh — current status.</p>
+    `),
+    /max is 3/
+  );
+
+  assert.throws(
+    () => validateDailyDigestBody(`
+      <h2>PRODUCT (Sam)</h2>
+      <p><strong>LP Fund Discovery (65% complete)</strong> — LP finds relevant funds fast.<br>In flight: List sharing.</p>
+      <h2>SERVICES / GTM (David)</h2>
+      <p>No prior Services / GTM state available. David to provide current engagement status.</p>
+    `),
+    /banned/
+  );
+});

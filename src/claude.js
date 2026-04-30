@@ -41,6 +41,7 @@ export function sanitizeDigestSourceText(value) {
   return asText(value)
     .split('\n')
     .map(line => line
+      .replace(/\b[A-Z][A-Za-z]+-[A-Za-z]+-\d+(?:\.\d+)?\b/g, 'implementation note')
       .replace(/\bPR\s*#?\d+\b/gi, 'implementation note')
       .replace(/\bpull request\s*#?\d+\b/gi, 'implementation note')
       .replace(/\b(?:src|app|components|routes|pages|supabase|api)\/[A-Za-z0-9_.\/-]+/gi, 'the codebase')
@@ -203,13 +204,13 @@ function renderWorkflows(workflows) {
   }
 
   return `<ul style="margin: 0 0 14px 20px; padding: 0;">${values
+    .slice(0, 3)
     .map(workflow => {
       const name = escapeHtml(asText(workflow.name, 'Unnamed workflow'));
       const percent = percentText(workflow.percent);
-      const done = escapeHtml(asText(workflow.done, 'Done state needs definition.'));
+      const summary = escapeHtml(asText(workflow.summary || workflow.done, 'User outcome needs definition.'));
       const inFlight = escapeHtml(asText(workflow.inFlight, 'No active work called out today.'));
-      const gap = escapeHtml(asText(workflow.gap, 'No explicit gap.'));
-      return `<li style="margin: 0 0 10px 0;"><strong>${name} (${percent} complete)</strong> — ${done}<br>In flight: ${inFlight}<br>Gap: ${gap}</li>`;
+      return `<li style="margin: 0 0 10px 0;"><strong>${name} (${percent} complete)</strong> — ${summary}<br>In flight: ${inFlight}</li>`;
     })
     .join('')}</ul>`;
 }
@@ -237,6 +238,8 @@ function normalizeDailyDigest(digest, priorDigests = []) {
     services: digest.services || {}
   };
 
+  normalized.product.workflows = asArray(normalized.product.workflows).slice(0, 3);
+
   if (!servicesHasContent(normalized.services)) {
     const priorServices = latestPriorServicesDigest(priorDigests);
     normalized.services = {
@@ -255,6 +258,7 @@ function renderDailyDigestBody(digest) {
   const product = digest.product || {};
   const services = digest.services || {};
   const biggestUnblock = asText(product.biggestUnblock);
+  const servicesBody = renderServicesBody(services);
 
   return `<div style="font-family: Georgia, serif; font-size: 15px; line-height: 1.6;">
   <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 24px 0 10px 0;">═══════════════════════════════════════════</p>
@@ -274,16 +278,27 @@ function renderDailyDigestBody(digest) {
   <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 0 0 18px 0;">═══════════════════════════════════════════</p>
 
   <p style="margin: 0 0 16px 0;"><strong>Goal:</strong> $10K in services revenue by end of May.</p>
-
-  <h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0;">Active Engagements</h3>
-  ${renderBullets(services.activeEngagements, 'No prior services state available.')}
-
-  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Diligence Packages</h3>
-  ${renderBullets(services.diligencePackages, 'No prior diligence package state available.')}
-
-  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Needs Discussion</h3>
-  ${renderBullets(services.needsDiscussion, 'None urgent today.')}
+  ${servicesBody}
 </div>`;
+}
+
+function renderServicesBody(services) {
+  if (!servicesHasContent(services)) {
+    return '<p style="margin: 0 0 14px 0;">No current Services / GTM update.</p>';
+  }
+
+  return `
+  ${asArray(services.activeEngagements).length ? `
+  <h3 style="font-size: 15px; font-weight: bold; margin: 0 0 8px 0;">Active Engagements</h3>
+  ${renderBullets(services.activeEngagements, '')}` : ''}
+
+  ${asArray(services.diligencePackages).length ? `
+  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Diligence Packages</h3>
+  ${renderBullets(services.diligencePackages, '')}` : ''}
+
+  ${asArray(services.needsDiscussion).length ? `
+  <h3 style="font-size: 15px; font-weight: bold; margin: 20px 0 8px 0;">Needs Discussion</h3>
+  ${renderBullets(services.needsDiscussion, '')}` : ''}`;
 }
 
 export function validateDailyDigestBody(body) {
@@ -310,12 +325,27 @@ export function validateDailyDigestBody(body) {
   const bannedPhrases = [
     /\bSupply Loop\b/i,
     /\bDemand Loop\b/i,
+    /\bT-[A-Za-z0-9-]+(?:\.\d+)?\b/i,
+    /\boracle\b/i,
+    /\bcanonical fields?\b/i,
+    /\bmanual locks?\b/i,
+    /\badmin review queue\b/i,
+    /\bstub routes?\b/i,
+    /\bproxy query\b/i,
+    /\bcold-start\b/i,
+    /\bGemini enrichment\b/i,
+    /\blong_description\b/i,
+    /\bimplementation note\b/i,
+    /\bimplementation file\b/i,
     /\bPR\s*#?\d+\b/i,
     /\bpull request\s*#?\d+\b/i,
     /\b(?:src|app|components|routes|pages|supabase|api)\/[A-Za-z0-9_.\/-]+/i,
     /\/dashboard\/[A-Za-z0-9_/-]+/i,
     /\bNo active external engagement moved today\b/i,
     /\bNo diligence package movement today\b/i,
+    /\bNo prior services state available\b/i,
+    /\bNo prior Services\s*\/\s*GTM state available\b/i,
+    /\bDavid to provide current\b/i,
     /\bNo #samsupdate note found\b/i
   ];
 
@@ -323,6 +353,28 @@ export function validateDailyDigestBody(body) {
   if (leakedPhrase) {
     throw new Error(`Daily digest leaked a banned implementation or fallback phrase: ${leakedPhrase}`);
   }
+
+  const workflowCount = (text.match(/\(\d+%\s+complete\)/gi) || []).length;
+  if (workflowCount > 3) {
+    throw new Error(`Daily digest included ${workflowCount} product workflows; max is 3.`);
+  }
+
+  const longWorkflowLine = text
+    .split(/In flight:/i)
+    .map(line => line.trim())
+    .find(line => {
+      const match = line.match(/\(\d+%\s+complete\)\s+—\s+(.+)/i);
+      if (!match) return false;
+      return wordCount(match[1]) > 22;
+    });
+
+  if (longWorkflowLine) {
+    throw new Error('Daily digest included an overlong workflow summary.');
+  }
+}
+
+function wordCount(value) {
+  return asText(value).split(/\s+/).filter(Boolean).length;
 }
 
 function escapeHtml(value) {
