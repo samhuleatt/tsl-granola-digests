@@ -76,11 +76,6 @@ async function main() {
   const heading = `TSL Daily — ${formatDailyHeadingDate(today)}`;
   const html = await generateDailyDigest({ meetings, tasks, samUpdate, priorDigests, heading });
 
-  if (!html) {
-    console.log('Daily digest skipped: no #samsupdate, no TSL meetings, and no usable prior digest history.');
-    return;
-  }
-
   // 7. Build subject and send
   const dateStr = formatDailySubjectDate(today);
   const subject = `TSL Daily — ${dateStr}`;

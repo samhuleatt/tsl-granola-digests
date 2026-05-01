@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPriorDigestContext, hasDailyOperatingSource, sanitizeDigestSourceText, validateDailyDigestBody } from '../src/claude.js';
+import { buildPriorDigestContext, generateDailyDigest, hasDailyOperatingSource, sanitizeDigestSourceText, validateDailyDigestBody } from '../src/claude.js';
 
 test('buildPriorDigestContext extracts prior Services state', () => {
   const context = buildPriorDigestContext([
@@ -127,4 +127,21 @@ test('hasDailyOperatingSource does not treat TASKS.md as primary source', () => 
     samUpdate: null,
     priorDigests: [{ html: '<h2>PRODUCT (Sam)</h2><p>LP Fund Discovery.</p>' }]
   }), true);
+});
+
+test('generateDailyDigest still runs without Granola notes using last-known fallback', async () => {
+  const html = await generateDailyDigest({
+    meetings: [],
+    tasks: 'PR #123 T-Triage-2 oracle stub routes',
+    samUpdate: null,
+    priorDigests: [],
+    heading: 'TSL Daily — Test'
+  });
+
+  assert.match(html, /LP Fund Discovery/);
+  assert.match(html, /List management UI so Sam can share TSL20 with David/);
+  assert.match(html, /Sources: Last known operating state/);
+  assert.doesNotMatch(html, /T-Triage/);
+  assert.doesNotMatch(html, /oracle/);
+  assert.doesNotMatch(html, /stub routes/);
 });

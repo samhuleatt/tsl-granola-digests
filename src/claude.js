@@ -423,8 +423,10 @@ ${body}
 
 export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDigests = [], heading }) {
   if (!hasDailyOperatingSource({ meetings, samUpdate, priorDigests })) {
-    console.log('No daily operating source available; skipping digest generation rather than using TASKS.md as the primary source.');
-    return null;
+    console.log('No daily operating source available; using deterministic last-known-state fallback.');
+    const body = renderDailyDigestBody(buildLastKnownDailyDigest());
+    validateDailyDigestBody(body);
+    return wrapDailyHtml(body, heading, 'Sources: Last known operating state.');
   }
 
   const system = loadPrompt('daily');
@@ -456,6 +458,28 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDig
 
 export function hasDailyOperatingSource({ meetings = [], samUpdate = null, priorDigests = [] } = {}) {
   return Boolean(samUpdate) || asArray(meetings).length > 0 || hasUsablePriorDigestContext(priorDigests);
+}
+
+function buildLastKnownDailyDigest() {
+  return {
+    product: {
+      workflows: [
+        {
+          name: 'LP Fund Discovery',
+          percent: 65,
+          summary: 'LP lands and finds relevant funds fast via browse + search.',
+          inFlight: 'List management UI so Sam can share TSL20 with David.'
+        }
+      ],
+      needsDiscussion: [],
+      biggestUnblock: ''
+    },
+    services: {
+      activeEngagements: [],
+      diligencePackages: [],
+      needsDiscussion: []
+    }
+  };
 }
 
 export async function generateWeeklyDigest({ meetings, tasks, rangeLabel }) {
