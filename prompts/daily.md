@@ -10,7 +10,7 @@ You will be given:
 - The exact source line
 - Sam's optional daily Granola status note, if a note tagged #samsupdate exists today
 - TSL-relevant meeting notes from the current window
-- Current TASKS.md context, if available
+- Current TASKS.md context, if available. This is supporting context only, never the primary source.
 - Recent prior daily digest history for Services / GTM carry-forward
 - Product-level TASKS.md context. This may have already been filtered to remove engineering implementation residue.
 
@@ -64,6 +64,7 @@ Return only valid JSON. Do not return HTML. Do not return Markdown. Do not wrap 
 14. Services carry-forward rule: if David has not provided fresh Services / GTM input today, carry forward the last known Services state from recent prior daily digests. Do not fabricate emptiness such as "No active external engagement moved today" when prior state exists. Restate the prior state briefly and clearly.
 15. Be direct, specific, and brief. This should feel like an operating memo, not a ticket digest.
 16. If there is no Services / GTM source state, leave Services arrays empty. Do not add scaffolding, requests, or nudges for David to provide status.
+17. Do not create Product workflows solely from TASKS.md. Use TASKS.md only to clarify live work already present in Sam's update, TSL meetings, or prior digest history.
 
 ## Language constraints
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPriorDigestContext, sanitizeDigestSourceText, validateDailyDigestBody } from '../src/claude.js';
+import { buildPriorDigestContext, hasDailyOperatingSource, sanitizeDigestSourceText, validateDailyDigestBody } from '../src/claude.js';
 
 test('buildPriorDigestContext extracts prior Services state', () => {
   const context = buildPriorDigestContext([
@@ -107,4 +107,24 @@ test('validateDailyDigestBody rejects the regressed technical digest style', () 
     `),
     /banned/
   );
+});
+
+test('hasDailyOperatingSource does not treat TASKS.md as primary source', () => {
+  assert.equal(hasDailyOperatingSource({
+    meetings: [],
+    samUpdate: null,
+    priorDigests: []
+  }), false);
+
+  assert.equal(hasDailyOperatingSource({
+    meetings: [{ title: 'Sam / David' }],
+    samUpdate: null,
+    priorDigests: []
+  }), true);
+
+  assert.equal(hasDailyOperatingSource({
+    meetings: [],
+    samUpdate: null,
+    priorDigests: [{ html: '<h2>PRODUCT (Sam)</h2><p>LP Fund Discovery.</p>' }]
+  }), true);
 });

@@ -155,6 +155,14 @@ export function buildPriorDigestContext(priorDigests = []) {
   }).join('\n\n');
 }
 
+export function hasUsablePriorDigestContext(priorDigests = []) {
+  return asArray(priorDigests).some(digest => {
+    const text = textOnly(asText(digest.html));
+    return /\bSERVICES\s*\/\s*GTM\s*\(David\)/i.test(text) ||
+      /\bPRODUCT\s*\(Sam\)/i.test(text);
+  });
+}
+
 function extractJson(text) {
   const trimmed = text.trim();
   const withoutFence = trimmed
@@ -414,6 +422,11 @@ ${body}
 }
 
 export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDigests = [], heading }) {
+  if (!hasDailyOperatingSource({ meetings, samUpdate, priorDigests })) {
+    console.log('No daily operating source available; skipping digest generation rather than using TASKS.md as the primary source.');
+    return null;
+  }
+
   const system = loadPrompt('daily');
   const meetingsText = buildMeetingsText(meetings);
   const samUpdateText = buildSamUpdateText(samUpdate);
@@ -439,6 +452,10 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDig
   ].join('\n');
   const body = await generateValidatedDailyDigest(system, user, priorDigests);
   return wrapDailyHtml(body, heading, sourceLine);
+}
+
+export function hasDailyOperatingSource({ meetings = [], samUpdate = null, priorDigests = [] } = {}) {
+  return Boolean(samUpdate) || asArray(meetings).length > 0 || hasUsablePriorDigestContext(priorDigests);
 }
 
 export async function generateWeeklyDigest({ meetings, tasks, rangeLabel }) {
