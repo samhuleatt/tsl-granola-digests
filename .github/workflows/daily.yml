@@ -2,8 +2,9 @@ name: TSL Daily Digest
 
 on:
   schedule:
-    # Run at both possible UTC offsets for 9pm Eastern; src/daily.js sends only when ET hour is 21.
-    - cron: '0 1,2 * * *'
+    # 9pm Eastern, Monday-Friday. GitHub cron is UTC, so run both DST offsets;
+    # src/daily.js sends only when the Eastern weekday/hour matches.
+    - cron: '0 1,2 * * 2-6'
   workflow_dispatch:          # allow manual trigger for testing
 
 jobs:
@@ -22,6 +23,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
-          REQUIRE_DIGEST_HOUR: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+          REQUIRE_DIGEST_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

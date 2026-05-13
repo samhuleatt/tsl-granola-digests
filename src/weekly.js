@@ -1,7 +1,7 @@
 import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateWeeklyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
-import { formatWeekendRoundupDate } from './time.js';
+import { formatWeekendRoundupDate, getDigestHour, getDigestWeekday, isWeekendDigestSendWindow } from './time.js';
 
 async function fetchTasks() {
   try {
@@ -18,6 +18,11 @@ async function fetchTasks() {
 }
 
 async function main() {
+  if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !isWeekendDigestSendWindow()) {
+    console.log(`Skipping weekly digest because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Saturday at 09:00 ET.`);
+    return;
+  }
+
   // 1. Fetch last 7 days of notes from Granola
   console.log('Fetching this week\'s meetings from Granola...');
   const allNotes = await fetchWeeksMeetings();

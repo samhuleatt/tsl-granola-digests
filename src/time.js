@@ -30,6 +30,14 @@ export function isDigestMonday(date = new Date()) {
   return getDigestWeekday(date) === 'Monday';
 }
 
+export function isDailyDigestWeekday(date = new Date()) {
+  return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].includes(getDigestWeekday(date));
+}
+
+export function isWeekendDigestDay(date = new Date()) {
+  return getDigestWeekday(date) === 'Saturday';
+}
+
 export function getDigestHour(date = new Date()) {
   return Number(formatInTimeZone(date, {
     hour: 'numeric',
@@ -39,6 +47,14 @@ export function getDigestHour(date = new Date()) {
 
 export function isDigestSendHour(date = new Date()) {
   return getDigestHour(date) === 21;
+}
+
+export function isDailyDigestSendWindow(date = new Date()) {
+  return isDailyDigestWeekday(date) && getDigestHour(date) === 21;
+}
+
+export function isWeekendDigestSendWindow(date = new Date()) {
+  return isWeekendDigestDay(date) && getDigestHour(date) === 9;
 }
 
 export function getStartOfToday(date = new Date()) {

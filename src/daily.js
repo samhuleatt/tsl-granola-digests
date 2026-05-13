@@ -2,7 +2,7 @@ import { fetchLatestSamUpdate, fetchTodaysMeetings, filterTSLMeetings, fetchNote
 import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
 import { fetchRecentDailyDigests, saveDailyDigest } from './supabase.js';
-import { formatDailyHeadingDate, formatDailyStorageDate, formatDailySubjectDate, getDigestHour, isDigestSendHour } from './time.js';
+import { formatDailyHeadingDate, formatDailyStorageDate, formatDailySubjectDate, getDigestHour, getDigestWeekday, isDailyDigestSendWindow } from './time.js';
 
 async function fetchTasks() {
   const pat = process.env.GH_PAT;
@@ -26,8 +26,8 @@ async function fetchTasks() {
 }
 
 async function main() {
-  if (process.env.REQUIRE_DIGEST_HOUR === 'true' && !isDigestSendHour()) {
-    console.log(`Skipping daily digest because it is ${getDigestHour()}:00 ET, not 21:00 ET.`);
+  if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !isDailyDigestSendWindow()) {
+    console.log(`Skipping daily digest because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Monday-Friday at 21:00 ET.`);
     return;
   }
 
