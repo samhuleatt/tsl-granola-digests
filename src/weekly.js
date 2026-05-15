@@ -1,7 +1,7 @@
 import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateWeeklyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
-import { formatWeekendRoundupDate, getDigestHour, getDigestWeekday, isWeekendDigestSendWindow } from './time.js';
+import { formatDailyStorageDate, formatWeekendRoundupDate, getDigestHour, getDigestWeekday, isWeekendDigestSendWindow } from './time.js';
 
 async function fetchTasks() {
   try {
@@ -60,7 +60,12 @@ async function main() {
   const subject = heading;
   console.log(`Subject: ${subject}`);
 
-  await sendEmail({ subject, html });
+  if (process.env.SEND_DIGEST_EMAIL !== 'true') {
+    console.log('Dry run complete; SEND_DIGEST_EMAIL is not true, so no email was sent.');
+    return;
+  }
+
+  await sendEmail({ subject, html, idempotencyKey: `tsl-digest/${formatDailyStorageDate(today)}` });
   console.log('Weekly digest sent successfully');
 }
 

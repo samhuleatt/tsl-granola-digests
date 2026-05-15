@@ -81,13 +81,18 @@ async function main() {
   const subject = `TSL Daily — ${dateStr}`;
   console.log(`Subject: ${subject}`);
 
+  if (process.env.SEND_DIGEST_EMAIL !== 'true') {
+    console.log('Dry run complete; SEND_DIGEST_EMAIL is not true, so no email was sent.');
+    return;
+  }
+
   await saveDailyDigest({
     digestDate,
     subject,
     html
   });
 
-  await sendEmail({ subject, html });
+  await sendEmail({ subject, html, idempotencyKey: `tsl-digest/${digestDate}` });
   console.log('Daily digest sent successfully');
 }
 

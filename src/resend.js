@@ -1,14 +1,19 @@
-export async function sendEmail({ subject, html }) {
+export async function sendEmail({ subject, html, idempotencyKey }) {
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       console.log(`Sending email attempt ${attempt}/${maxAttempts}...`);
+      const headers = {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      };
+      if (idempotencyKey) {
+        headers['Idempotency-Key'] = idempotencyKey;
+      }
+
       const res = await fetch('https://api.resend.com/emails', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
+        headers,
         body: JSON.stringify({
           from: 'TSL Digest <digest@mail.thesideletter.co>',
           to: ['sam.huleatt@gmail.com', 'dav.j.zhou@gmail.com'],
@@ -17,6 +22,10 @@ export async function sendEmail({ subject, html }) {
         })
       });
       const body = await res.text();
+      if (res.status === 409 && /idempotent|idempotency/i.test(body)) {
+        console.warn(`Email send suppressed by Resend idempotency key "${idempotencyKey}" — ${body}`);
+        return;
+      }
       if (!res.ok) throw new Error(`Resend API error (${res.status}): ${body}`);
       console.log(`Email sent successfully — ${body}`);
       return;

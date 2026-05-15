@@ -6,6 +6,12 @@ on:
     # src/weekly.js sends only when the Eastern weekday/hour matches.
     - cron: '0 13,14 * * 6'
   workflow_dispatch:
+    inputs:
+      send_email:
+        description: 'Actually send the email instead of a dry run'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   digest:
@@ -23,3 +29,4 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
           REQUIRE_DIGEST_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+          SEND_DIGEST_EMAIL: ${{ github.event_name == 'schedule' || inputs.send_email }}
