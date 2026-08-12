@@ -57,6 +57,10 @@ export function isWeekendDigestSendWindow(date = new Date()) {
   return isWeekendDigestDay(date) && getDigestHour(date) === 9;
 }
 
+export function isWeeklyOperatingReviewSendWindow(date = new Date()) {
+  return isDigestMonday(date) && getDigestHour(date) === 7;
+}
+
 export function getStartOfToday(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: DIGEST_TIME_ZONE,

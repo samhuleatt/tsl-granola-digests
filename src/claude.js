@@ -379,6 +379,7 @@ export function validateDailyDigestBody(body) {
   if (longWorkflowLine) {
     throw new Error('Daily digest included an overlong workflow summary.');
   }
+
 }
 
 function wordCount(value) {
@@ -412,7 +413,7 @@ function wrapWeeklyHtml(body, rangeLabel, sourceLine) {
 <html><head><meta charset="utf-8"></head>
 <body style="font-family:Georgia,serif;max-width:620px;margin:0 auto;padding:24px;color:#1a1a1a;">
 <p style="font-size:13px;color:#888;margin:0 0 4px 0;">TSL Internal</p>
-<h1 style="font-size:22px;font-weight:bold;margin:0 0 4px 0;">TSL Weekend Roundup</h1>
+<h1 style="font-size:22px;font-weight:bold;margin:0 0 4px 0;">TSL Weekly Operating Review</h1>
 <p style="font-size:14px;color:#555;margin:0 0 24px 0;">${escapeHtml(rangeLabel)} &nbsp;·&nbsp; For Sam & David</p>
 <hr style="border:none;border-top:1px solid #e0e0e0;margin:0 0 24px 0;">
 ${body}
@@ -482,18 +483,27 @@ function buildLastKnownDailyDigest() {
   };
 }
 
-export async function generateWeeklyDigest({ meetings, tasks, rangeLabel }) {
+export async function generateWeeklyDigest({ meetings, tasks, pipeline, rangeLabel }) {
   const system = loadPrompt('weekly');
   const meetingsText = buildMeetingsText(meetings);
   const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
   const user = [
     `Week label: ${rangeLabel}`,
-    `Source line: ${buildMeetingSourceLine(meetings)}`,
+    `Source line: ${buildMeetingSourceLine(meetings)} | CRM Pipeline snapshot`,
     '',
+    '# CRM pipeline operating data',
+    JSON.stringify({
+      current: pipeline.summary,
+      changes: pipeline.changes,
+      previousCapturedAt: pipeline.previousCapturedAt
+    }, null, 2),
+    '',
+    '# Granola meetings from the last seven days',
     meetingsText,
     '',
+    '# Product/task context',
     tasksText
   ].join('\n');
   const body = await generate(system, user);
-  return wrapWeeklyHtml(body, rangeLabel, buildMeetingSourceLine(meetings));
+  return wrapWeeklyHtml(body, rangeLabel, `${buildMeetingSourceLine(meetings)} | CRM Pipeline snapshot`);
 }

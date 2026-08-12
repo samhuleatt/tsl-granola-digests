@@ -1,7 +1,8 @@
 import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
 import { generateWeeklyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
-import { formatDailyStorageDate, formatWeekendRoundupDate, getDigestHour, getDigestWeekday, isWeekendDigestSendWindow } from './time.js';
+import { buildWeeklyPipelineContext, savePipelineSnapshot } from './leads.js';
+import { formatDailyHeadingDate, formatDailyStorageDate, getDigestHour, getDigestWeekday, isWeeklyOperatingReviewSendWindow } from './time.js';
 
 async function fetchTasks() {
   try {
@@ -18,8 +19,8 @@ async function fetchTasks() {
 }
 
 async function main() {
-  if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !isWeekendDigestSendWindow()) {
-    console.log(`Skipping weekly digest because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Saturday at 09:00 ET.`);
+  if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !isWeeklyOperatingReviewSendWindow()) {
+    console.log(`Skipping weekly review because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Monday at 07:00 ET.`);
     return;
   }
 
@@ -49,12 +50,19 @@ async function main() {
     })
   );
 
-  // 5. Generate digest HTML via Claude
-  console.log('Generating weekly digest with Claude...');
+  // 5. Read the live CRM and compare it with the last durable Postgres snapshot.
+  // The weekly review fails closed if this source is unavailable: sending a
+  // strategy memo with a missing BD section would create false confidence.
+  console.log('Reading CRM Pipeline and prior snapshot...');
   const today = new Date();
-  const roundupDate = formatWeekendRoundupDate(today);
-  const heading = `TSL Weekend Roundup — ${roundupDate}`;
-  const html = await generateWeeklyDigest({ meetings, tasks, rangeLabel: heading });
+  const pipeline = await buildWeeklyPipelineContext({ asOf: today });
+  console.log(`CRM: ${pipeline.summary.total} records, ${pipeline.summary.overdueCount} overdue, ${pipeline.summary.unownedCount} unowned`);
+
+  // 6. Generate the operating review.
+  console.log('Generating weekly operating review with Claude...');
+  const reviewDate = formatDailyHeadingDate(today);
+  const heading = `Weekly Operating Review — ${reviewDate}`;
+  const html = await generateWeeklyDigest({ meetings, tasks, pipeline, rangeLabel: reviewDate });
 
   // 6. Build subject and send
   const subject = heading;
@@ -65,8 +73,9 @@ async function main() {
     return;
   }
 
-  await sendEmail({ subject, html, idempotencyKey: `tsl-digest/${formatDailyStorageDate(today)}` });
-  console.log('Weekly digest sent successfully');
+  await sendEmail({ subject, html, idempotencyKey: `tsl-weekly-operating-review/${formatDailyStorageDate(today)}` });
+  await savePipelineSnapshot({ rows: pipeline.rows, summary: pipeline.summary, capturedAt: today });
+  console.log('Weekly operating review sent and CRM snapshot stored');
 }
 
 main().catch(err => {

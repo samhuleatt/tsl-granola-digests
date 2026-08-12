@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.37.0",
+    "google-auth-library": "^10.9.1",
     "node-fetch": "^3.3.2"
   }
 }

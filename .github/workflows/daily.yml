@@ -1,10 +1,6 @@
-name: TSL Daily Digest
+name: TSL Daily Digest (Legacy Manual Run)
 
 on:
-  schedule:
-    # 9pm Eastern, Monday-Friday. GitHub cron is UTC, so run both DST offsets;
-    # src/daily.js sends only when the Eastern weekday/hour matches.
-    - cron: '0 1,2 * * 2-6'
   workflow_dispatch:
     inputs:
       send_email:
@@ -20,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm install
       - run: npm test
       - run: node src/daily.js
@@ -29,7 +25,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
-          REQUIRE_DIGEST_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
-          SEND_DIGEST_EMAIL: ${{ github.event_name == 'schedule' || inputs.send_email }}
+          REQUIRE_DIGEST_WINDOW: 'false'
+          SEND_DIGEST_EMAIL: ${{ inputs.send_email }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
