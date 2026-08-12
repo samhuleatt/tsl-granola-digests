@@ -461,6 +461,55 @@ export function hasDailyOperatingSource({ meetings = [], samUpdate = null, prior
   return Boolean(samUpdate) || asArray(meetings).length > 0 || hasUsablePriorDigestContext(priorDigests);
 }
 
+function normalizeLeadIdentity(value) {
+  return asText(value)
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+export function filterNewLeadCandidates({ candidates = [], crmRows = [], meetings = [] } = {}) {
+  const sourceText = normalizeLeadIdentity(buildMeetingsText(meetings));
+  const existingPeople = new Set(crmRows.map(row => normalizeLeadIdentity(row.Contact)).filter(Boolean));
+  const existingFirms = new Set(crmRows.map(row => normalizeLeadIdentity(row.Entity)).filter(Boolean));
+  const seen = new Set();
+
+  return asArray(candidates)
+    .filter(candidate => candidate && typeof candidate === 'object')
+    .map(candidate => ({
+      person: asText(candidate.person),
+      firm: asText(candidate.firm),
+      likelyRole: asText(candidate.likelyRole),
+      whyFit: asText(candidate.whyFit),
+      sourceMeeting: asText(candidate.sourceMeeting),
+      warmPath: asText(candidate.warmPath),
+      outreachThesis: asText(candidate.outreachThesis)
+    }))
+    .filter(candidate => candidate.person || candidate.firm)
+    .filter(candidate => {
+      const person = normalizeLeadIdentity(candidate.person);
+      const firm = normalizeLeadIdentity(candidate.firm);
+      const grounded = (!person || sourceText.includes(person)) && (!firm || sourceText.includes(firm));
+      const alreadyKnown = (person && existingPeople.has(person)) || (firm && existingFirms.has(firm));
+      const fingerprint = `${person}|${firm}`;
+      if (!grounded || alreadyKnown || seen.has(fingerprint)) return false;
+      seen.add(fingerprint);
+      return true;
+    })
+    .slice(0, 10);
+}
+
+export async function generateLeadCandidates({ meetings, crmRows }) {
+  if (!meetings.length) return [];
+  const system = loadPrompt('lead-discovery');
+  const response = extractJson(await generate(system, buildMeetingsText(meetings)));
+  return filterNewLeadCandidates({ candidates: response.candidates, crmRows, meetings });
+}
+
 function buildLastKnownDailyDigest() {
   return {
     product: {
@@ -483,7 +532,7 @@ function buildLastKnownDailyDigest() {
   };
 }
 
-export async function generateWeeklyDigest({ meetings, tasks, pipeline, rangeLabel }) {
+export async function generateWeeklyDigest({ meetings, tasks, pipeline, leadCandidates = [], rangeLabel }) {
   const system = loadPrompt('weekly');
   const meetingsText = buildMeetingsText(meetings);
   const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
@@ -497,6 +546,9 @@ export async function generateWeeklyDigest({ meetings, tasks, pipeline, rangeLab
       changes: pipeline.changes,
       previousCapturedAt: pipeline.previousCapturedAt
     }, null, 2),
+    '',
+    '# New lead candidates extracted from Granola and filtered locally against CRM',
+    JSON.stringify(leadCandidates, null, 2),
     '',
     '# Granola meetings from the last seven days',
     meetingsText,

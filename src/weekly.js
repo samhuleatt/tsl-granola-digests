@@ -1,5 +1,5 @@
 import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
-import { generateWeeklyDigest } from './claude.js';
+import { generateLeadCandidates, generateWeeklyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
 import { buildWeeklyPipelineContext, savePipelineSnapshot } from './leads.js';
 import { formatDailyHeadingDate, formatDailyStorageDate, getDigestHour, getDigestWeekday, isWeeklyOperatingReviewSendWindow } from './time.js';
@@ -58,11 +58,18 @@ async function main() {
   const pipeline = await buildWeeklyPipelineContext({ asOf: today });
   console.log(`CRM: ${pipeline.summary.total} records, ${pipeline.summary.overdueCount} overdue, ${pipeline.summary.unownedCount} unowned`);
 
-  // 6. Generate the operating review.
+  // 6. A separate, tightly scoped model pass proposes named leads from
+  // Granola. Deterministic code then removes ungrounded names and any person
+  // or firm already present in the CRM before the operating review sees them.
+  console.log('Identifying new lead candidates from Granola...');
+  const leadCandidates = await generateLeadCandidates({ meetings, crmRows: pipeline.rows });
+  console.log(`Lead discovery: ${leadCandidates.length} new grounded candidates`);
+
+  // 7. Generate the operating review.
   console.log('Generating weekly operating review with Claude...');
   const reviewDate = formatDailyHeadingDate(today);
   const heading = `Weekly Operating Review — ${reviewDate}`;
-  const html = await generateWeeklyDigest({ meetings, tasks, pipeline, rangeLabel: reviewDate });
+  const html = await generateWeeklyDigest({ meetings, tasks, pipeline, leadCandidates, rangeLabel: reviewDate });
 
   // 6. Build subject and send
   const subject = heading;
