@@ -32,7 +32,8 @@ jobs:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           CRM_SPREADSHEET_ID: 1blCZAQgG1Q3FbrAh1-XH9tKTQHEmFmHLkJBU56hHUXs
           CRM_PIPELINE_RANGE: "'CRM Pipeline'!A:P"
-          SUPABASE_URL: https://mdcwlnoyndknefokaumy.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          WEEKLY_AGENT_MEMORY_URL: https://mdcwlnoyndknefokaumy.supabase.co/functions/v1/weekly-agent-memory
+          WEEKLY_AGENT_SECRET: ${{ secrets.WEEKLY_AGENT_SECRET }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           REQUIRE_DIGEST_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
           SEND_DIGEST_EMAIL: ${{ github.event_name == 'schedule' || inputs.send_email }}

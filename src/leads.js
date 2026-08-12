@@ -157,32 +157,38 @@ export async function fetchCrmPipeline() {
   return rows;
 }
 
-function supabaseConfig() {
-  const url = clean(process.env.SUPABASE_URL);
-  const key = clean(process.env.SUPABASE_SERVICE_ROLE_KEY);
-  if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for weekly CRM memory.');
-  return { url: url.replace(/\/$/, ''), key };
+function memoryConfig() {
+  const url = clean(process.env.WEEKLY_AGENT_MEMORY_URL);
+  const secret = clean(process.env.WEEKLY_AGENT_SECRET);
+  const anonKey = clean(process.env.SUPABASE_ANON_KEY);
+  if (!url || !secret || !anonKey) throw new Error('WEEKLY_AGENT_MEMORY_URL, WEEKLY_AGENT_SECRET, and SUPABASE_ANON_KEY are required for weekly CRM memory.');
+  return { url: url.replace(/\/$/, ''), secret, anonKey };
+}
+
+function memoryHeaders({ secret, anonKey }) {
+  return {
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
+    'x-weekly-agent-secret': secret
+  };
 }
 
 export async function fetchPreviousPipelineSnapshot() {
-  const { url, key } = supabaseConfig();
-  const endpoint = `${url}/rest/v1/crm_pipeline_snapshots?select=captured_at,rows,summary&order=captured_at.desc&limit=1`;
-  const response = await fetch(endpoint, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  const config = memoryConfig();
+  const response = await fetch(config.url, { headers: memoryHeaders(config) });
   if (!response.ok) throw new Error(`Previous CRM snapshot read failed (${response.status}): ${await response.text()}`);
-  const [snapshot] = await response.json();
-  return snapshot || null;
+  const payload = await response.json();
+  return payload.snapshot || null;
 }
 
 export async function savePipelineSnapshot({ rows, summary, capturedAt = new Date() }) {
-  const { url, key } = supabaseConfig();
+  const config = memoryConfig();
   const fingerprint = createHash('sha256').update(JSON.stringify(rows)).digest('hex');
-  const response = await fetch(`${url}/rest/v1/crm_pipeline_snapshots?on_conflict=fingerprint`, {
+  const response = await fetch(config.url, {
     method: 'POST',
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates'
+      ...memoryHeaders(config),
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       captured_at: capturedAt.toISOString(),
