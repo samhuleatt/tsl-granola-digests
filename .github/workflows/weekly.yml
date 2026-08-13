@@ -2,9 +2,9 @@ name: TSL Weekly Operating Review
 
 on:
   schedule:
-    # 7am Eastern on Monday. GitHub cron is UTC, so run both DST offsets;
-    # src/weekly.js sends only when the Eastern weekday/hour matches.
-    - cron: '0 11,12 * * 1'
+    # One Monday trigger. This lands at 7am EST / 8am EDT; GitHub may start
+    # scheduled jobs later, so delivery must not depend on the observed hour.
+    - cron: '0 12 * * 1'
   workflow_dispatch:
     inputs:
       send_email:
@@ -35,5 +35,5 @@ jobs:
           WEEKLY_AGENT_MEMORY_URL: https://mdcwlnoyndknefokaumy.supabase.co/functions/v1/weekly-agent-memory
           WEEKLY_AGENT_SECRET: ${{ secrets.WEEKLY_AGENT_SECRET }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          REQUIRE_DIGEST_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
+          REQUIRE_DIGEST_WINDOW: 'false'
           SEND_DIGEST_EMAIL: ${{ github.event_name == 'schedule' || inputs.send_email }}
