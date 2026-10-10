@@ -28,16 +28,15 @@ async function fetchNotes(createdAfter) {
   return notes;
 }
 
-export async function fetchTodaysMeetings() {
-  const now = new Date();
-  const isMonday = isDigestMonday(now);
+export async function fetchTodaysMeetings(day = new Date()) {
+  const isMonday = isDigestMonday(day);
   const hoursBack = isMonday ? 72 : 24;
-  const since = new Date(now.getTime() - hoursBack * 60 * 60 * 1000);
+  const since = new Date(day.getTime() - hoursBack * 60 * 60 * 1000);
   return fetchNotes(since);
 }
 
-export async function fetchTodaysNotes() {
-  return fetchNotes(getStartOfToday());
+export async function fetchTodaysNotes(day = new Date()) {
+  return fetchNotes(getStartOfToday(day));
 }
 
 export async function fetchWeeksMeetings() {
@@ -95,8 +94,8 @@ function noteTimestamp(note) {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
-export async function fetchLatestSamUpdate() {
-  const notes = await fetchTodaysNotes();
+export async function fetchLatestSamUpdate(day = new Date()) {
+  const notes = await fetchTodaysNotes(day);
   const details = await Promise.all(
     notes.map(async note => {
       try {

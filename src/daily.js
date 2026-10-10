@@ -2,7 +2,7 @@ import { fetchLatestSamUpdate, fetchTodaysMeetings, filterTSLMeetings, fetchNote
 import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
 import { fetchRecentDailyDigests, saveDailyDigest } from './supabase.js';
-import { formatDailyHeadingDate, formatDailyStorageDate, formatDailySubjectDate, getDigestHour, getDigestWeekday, isDailyDigestSendWindow } from './time.js';
+import { formatDailyHeadingDate, formatDailyStorageDate, formatDailySubjectDate, getDailyDigestDay, getDigestHour, getDigestWeekday } from './time.js';
 
 async function fetchTasks() {
   const pat = process.env.GH_PAT;
@@ -26,14 +26,18 @@ async function fetchTasks() {
 }
 
 async function main() {
-  if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !isDailyDigestSendWindow()) {
-    console.log(`Skipping daily digest because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Monday-Friday at 21:00 ET.`);
+  const now = new Date();
+  const scheduledDay = getDailyDigestDay(now);
+  if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !scheduledDay) {
+    console.log(`Skipping daily digest because it is ${getDigestWeekday(now)} ${getDigestHour(now)}:00 ET, outside a weekday evening (9pm ET to noon the next day).`);
     return;
   }
+  // Manual runs outside the window cover today.
+  const digestDay = scheduledDay ?? now;
 
-  // 1. Fetch today's notes from Granola
-  console.log('Fetching today\'s meetings from Granola...');
-  const allNotes = await fetchTodaysMeetings();
+  // 1. Fetch the digest day's notes from Granola
+  console.log(`Fetching meetings from Granola for ${formatDailyStorageDate(digestDay)}...`);
+  const allNotes = await fetchTodaysMeetings(digestDay);
   console.log(`Fetched ${allNotes.length} notes total`);
 
   // 2. Filter to TSL-relevant meeting context
@@ -42,7 +46,7 @@ async function main() {
 
   // 3. Fetch Sam's optional daily status update
   console.log('Fetching latest #samsupdate note...');
-  const samUpdate = await fetchLatestSamUpdate();
+  const samUpdate = await fetchLatestSamUpdate(digestDay);
   console.log(samUpdate ? `Found #samsupdate: ${samUpdate.title || samUpdate.id}` : 'No #samsupdate note found today');
 
   // 4. Fetch TASKS.md (skip silently on failure)
@@ -67,17 +71,16 @@ async function main() {
 
   // 6. Generate digest HTML via Claude
   console.log('Generating digest with Claude...');
-  const today = new Date();
-  const digestDate = formatDailyStorageDate(today);
+  const digestDate = formatDailyStorageDate(digestDay);
   console.log('Fetching recent daily digest history...');
   const priorDigests = await fetchRecentDailyDigests({ beforeDate: digestDate, limit: 5 });
   console.log(`Fetched ${priorDigests.length} prior digests`);
 
-  const heading = `TSL Daily — ${formatDailyHeadingDate(today)}`;
+  const heading = `TSL Daily — ${formatDailyHeadingDate(digestDay)}`;
   const html = await generateDailyDigest({ meetings, tasks, samUpdate, priorDigests, heading });
 
   // 7. Build subject and send
-  const dateStr = formatDailySubjectDate(today);
+  const dateStr = formatDailySubjectDate(digestDay);
   const subject = `TSL Daily — ${dateStr}`;
   console.log(`Subject: ${subject}`);
 

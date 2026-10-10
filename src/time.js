@@ -49,12 +49,26 @@ export function isDigestSendHour(date = new Date()) {
   return getDigestHour(date) === 21;
 }
 
+// GitHub often starts scheduled runs four or more hours late, so a run before
+// noon ET still counts for the weekday evening before. Resend's idempotency key
+// keeps it to one email per digest day.
+const LATE_RUN_CUTOFF_HOUR = 12;
+
+export function getDailyDigestDay(date = new Date()) {
+  const hour = getDigestHour(date);
+  if (hour >= 21) return isDailyDigestWeekday(date) ? date : null;
+  if (hour >= LATE_RUN_CUTOFF_HOUR) return null;
+  // Step back to about 9pm the evening before; the spare hours absorb DST shifts.
+  const previousEvening = new Date(date.getTime() - (hour + 3) * 60 * 60 * 1000);
+  return isDailyDigestWeekday(previousEvening) ? previousEvening : null;
+}
+
 export function isDailyDigestSendWindow(date = new Date()) {
-  return isDailyDigestWeekday(date) && getDigestHour(date) === 21;
+  return getDailyDigestDay(date) !== null;
 }
 
 export function isWeekendDigestSendWindow(date = new Date()) {
-  return isWeekendDigestDay(date) && getDigestHour(date) === 9;
+  return isWeekendDigestDay(date) && getDigestHour(date) >= 9;
 }
 
 export function getStartOfToday(date = new Date()) {

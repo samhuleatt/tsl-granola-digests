@@ -1,12 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { spawn } from 'child_process';
 import { readFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { buildMeetingSourceLine } from './time.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const client = new Anthropic();
+const MODEL = 'claude-sonnet-4-6';
+const GENERATION_TIMEOUT_MS = 180_000;
 const DAILY_GENERATION_ATTEMPTS = 3;
+let apiClient;
 
 function loadPrompt(name) {
   return readFileSync(join(__dirname, '..', 'prompts', `${name}.md`), 'utf8');
@@ -70,9 +74,53 @@ function buildDailySourceLine(meetings, samUpdate) {
   return meetingSourceLine.replace('Sources: ', `Sources: ${samSource} | `);
 }
 
+export function generationEngine(env = process.env) {
+  const forced = env.DIGEST_ENGINE;
+  if (forced === 'claude-code' || forced === 'api') return forced;
+  return env.CLAUDE_CODE_OAUTH_TOKEN ? 'claude-code' : 'api';
+}
+
+// Headless Claude Code on Sam's Max plan. The API path bills prepaid API
+// credits, which the plan does not cover; they ran out in September 2026.
+function generateWithClaudeCode(systemPrompt, userMessage) {
+  // An API key in the environment would take precedence over the plan token.
+  const env = { ...process.env };
+  delete env.ANTHROPIC_API_KEY;
+  if (env.CLAUDE_CODE_OAUTH_TOKEN) env.CLAUDE_CODE_OAUTH_TOKEN = env.CLAUDE_CODE_OAUTH_TOKEN.replace(/\s+/g, '');
+  const args = ['-p', '--model', MODEL, '--output-format', 'json', '--tools', '', '--system-prompt', systemPrompt];
+  return new Promise((resolve, reject) => {
+    // Run outside the repo so no project settings leak into the prompt.
+    const proc = spawn('claude', args, { env, cwd: tmpdir(), stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => proc.kill('SIGKILL'), GENERATION_TIMEOUT_MS);
+    proc.stdout.on('data', chunk => { stdout += chunk; });
+    proc.stderr.on('data', chunk => { stderr += chunk; });
+    proc.on('error', error => { clearTimeout(timer); reject(error); });
+    proc.on('close', code => {
+      clearTimeout(timer);
+      let result;
+      try {
+        result = JSON.parse(stdout);
+      } catch {
+        reject(new Error(`claude -p exited ${code}: ${(stderr || stdout).trim().slice(0, 500)}`));
+        return;
+      }
+      if (code !== 0 || result.is_error || !result.result) {
+        reject(new Error(`claude -p failed (exit ${code}): ${String(result.result ?? stderr).slice(0, 500)}`));
+        return;
+      }
+      resolve(result.result);
+    });
+    proc.stdin.end(userMessage);
+  });
+}
+
 async function generate(systemPrompt, userMessage) {
-  const msg = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+  if (generationEngine() === 'claude-code') return generateWithClaudeCode(systemPrompt, userMessage);
+  apiClient ??= new Anthropic();
+  const msg = await apiClient.messages.create({
+    model: MODEL,
     max_tokens: 4096,
     system: systemPrompt,
     messages: [{ role: 'user', content: userMessage }]
