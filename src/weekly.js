@@ -19,7 +19,7 @@ async function fetchTasks() {
 
 async function main() {
   if (process.env.REQUIRE_DIGEST_WINDOW === 'true' && !isWeekendDigestSendWindow()) {
-    console.log(`Skipping weekly digest because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Saturday at 09:00 ET.`);
+    console.log(`Skipping weekly digest because it is ${getDigestWeekday()} ${getDigestHour()}:00 ET, not Saturday from 09:00 ET.`);
     return;
   }
 

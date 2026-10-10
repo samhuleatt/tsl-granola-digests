@@ -3,8 +3,8 @@ name: TSL Weekly Digest
 on:
   schedule:
     # 9am Eastern on Saturday. GitHub cron is UTC, so run both DST offsets;
-    # src/weekly.js sends only when the Eastern weekday/hour matches.
-    - cron: '0 13,14 * * 6'
+    # src/weekly.js sends from 9am ET Saturday on, once per Saturday.
+    - cron: '17 13,14 * * 6'
   workflow_dispatch:
     inputs:
       send_email:
@@ -22,10 +22,12 @@ jobs:
         with:
           node-version: '20'
       - run: npm install
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
       - run: node src/weekly.js
         env:
           GRANOLA_API_KEY: ${{ secrets.GRANOLA_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
           REQUIRE_DIGEST_WINDOW: ${{ github.event_name == 'schedule' && 'true' || 'false' }}
