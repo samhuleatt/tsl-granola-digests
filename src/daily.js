@@ -1,4 +1,4 @@
-import { fetchLatestSamUpdate, fetchTodaysMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
+import { fetchLatestSamUpdate, fetchTodaysMeetings, filterTSLMeetings, fetchNoteDetail, fetchHistoricalMeetings } from './granola.js';
 import { generateDailyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
 import { fetchRecentDailyDigests, saveDailyDigest } from './supabase.js';
@@ -69,6 +69,11 @@ async function main() {
     })
   );
 
+  const historicalMeetings = await fetchHistoricalMeetings({
+    before: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    currentIds: meetings.map(meeting => meeting.id)
+  });
+
   // 6. Generate digest HTML via Claude
   console.log('Generating digest with Claude...');
   const digestDate = formatDailyStorageDate(digestDay);
@@ -77,7 +82,7 @@ async function main() {
   console.log(`Fetched ${priorDigests.length} prior digests`);
 
   const heading = `TSL Daily — ${formatDailyHeadingDate(digestDay)}`;
-  const html = await generateDailyDigest({ meetings, tasks, samUpdate, priorDigests, heading });
+  const html = await generateDailyDigest({ meetings, tasks, samUpdate, priorDigests, historicalMeetings, heading });
 
   // 7. Build subject and send
   const dateStr = formatDailySubjectDate(digestDay);

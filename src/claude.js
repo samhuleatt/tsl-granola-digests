@@ -5,6 +5,8 @@ import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { buildMeetingSourceLine } from './time.js';
+import { buildMemoryContext } from './memory.js';
+import { renderWeeklyBrief, validateEditorialText, stripRetiredGoal } from './editorial.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MODEL = 'claude-sonnet-4-6';
@@ -13,7 +15,9 @@ const DAILY_GENERATION_ATTEMPTS = 3;
 let apiClient;
 
 function loadPrompt(name) {
-  return readFileSync(join(__dirname, '..', 'prompts', `${name}.md`), 'utf8');
+  return [name, 'editorial'].map(prompt =>
+    readFileSync(join(__dirname, '..', 'prompts', `${prompt}.md`), 'utf8')
+  ).join('\n\n');
 }
 
 function buildMeetingsText(meetings) {
@@ -187,7 +191,7 @@ export function buildPriorDigestContext(priorDigests = []) {
   }
 
   return values.map(digest => {
-    const text = textOnly(asText(digest.html));
+    const text = textOnly(stripRetiredGoal(asText(digest.html)));
     const services = extractSectionText(
       text,
       /\bSERVICES\s*\/\s*GTM\s*\(David\)/i,
@@ -205,7 +209,7 @@ export function buildPriorDigestContext(priorDigests = []) {
 
 export function hasUsablePriorDigestContext(priorDigests = []) {
   return asArray(priorDigests).some(digest => {
-    const text = textOnly(asText(digest.html));
+    const text = textOnly(stripRetiredGoal(asText(digest.html)));
     return /\bSERVICES\s*\/\s*GTM\s*\(David\)/i.test(text) ||
       /\bPRODUCT\s*\(Sam\)/i.test(text);
   });
@@ -221,7 +225,7 @@ function extractJson(text) {
   const end = withoutFence.lastIndexOf('}');
 
   if (start === -1 || end === -1 || end < start) {
-    throw new Error('Daily digest response did not contain JSON.');
+    throw new Error('Digest response did not contain JSON.');
   }
 
   return JSON.parse(withoutFence.slice(start, end + 1));
@@ -280,7 +284,7 @@ function servicesHasContent(services) {
 function latestPriorServicesDigest(priorDigests = []) {
   const [latest] = asArray(priorDigests);
   if (!latest) return '';
-  const text = textOnly(asText(latest.html));
+  const text = textOnly(stripRetiredGoal(asText(latest.html)));
   return extractSectionText(
     text,
     /\bSERVICES\s*\/\s*GTM\s*\(David\)/i,
@@ -333,7 +337,6 @@ function renderDailyDigestBody(digest) {
   <h2 style="font-size: 16px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #333; margin: 0 0 12px 0;">SERVICES / GTM (David)</h2>
   <p style="font-size: 13px; letter-spacing: 0.08em; color: #777; margin: 0 0 18px 0;">═══════════════════════════════════════════</p>
 
-  <p style="margin: 0 0 16px 0;"><strong>Goal:</strong> $10K in services revenue by end of May.</p>
   ${servicesBody}
 </div>`;
 }
@@ -358,6 +361,7 @@ function renderServicesBody(services) {
 }
 
 export function validateDailyDigestBody(body) {
+  validateEditorialText(textOnly(body));
   const text = textOnly(body);
   const oldSections = [
     'Meetings',
@@ -469,7 +473,7 @@ ${body}
 </body></html>`;
 }
 
-export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDigests = [], heading }) {
+export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDigests = [], historicalMeetings = [], heading }) {
   if (!hasDailyOperatingSource({ meetings, samUpdate, priorDigests })) {
     console.log('No daily operating source available; using deterministic last-known-state fallback.');
     const body = renderDailyDigestBody(buildLastKnownDailyDigest());
@@ -497,8 +501,10 @@ export async function generateDailyDigest({ meetings, tasks, samUpdate, priorDig
     '# Product/task context',
     tasksText,
     '',
-    '# Recent prior daily digest history',
-    priorDigestText
+    '# Recent prior daily digest history (generated, lower-confidence continuity only)',
+    priorDigestText,
+    '',
+    buildMemoryContext(historicalMeetings)
   ].join('\n');
   const body = await generateValidatedDailyDigest(system, user, priorDigests);
   return wrapDailyHtml(body, heading, sourceLine);
@@ -530,18 +536,33 @@ function buildLastKnownDailyDigest() {
   };
 }
 
-export async function generateWeeklyDigest({ meetings, tasks, rangeLabel }) {
+export async function generateWeeklyDigest({ meetings, tasks, historicalMeetings = [], rangeLabel }, generateText = generate) {
+  const usableMeetings = meetings.filter(meeting => meeting.summary_markdown?.trim());
+  if (!usableMeetings.length) return null;
   const system = loadPrompt('weekly');
-  const meetingsText = buildMeetingsText(meetings);
-  const tasksText = tasks ? `## TASKS.md\n${tasks}` : '(TASKS.md unavailable)';
+  const allMeetings = [...usableMeetings, ...historicalMeetings.filter(meeting => meeting.summary_markdown?.trim())];
+  const meetingsText = allMeetings.map((meeting, index) =>
+    `## Source ${index + 1} (${index < usableMeetings.length ? 'current' : 'historical'}): ${buildMeetingSourceLine([meeting]).replace('Sources: ', '')}\n${meeting.summary_markdown}`
+  ).join('\n\n');
   const user = [
     `Week label: ${rangeLabel}`,
-    `Source line: ${buildMeetingSourceLine(meetings)}`,
-    '',
+    buildMemoryContext([], { includeHistory: false }),
+    '# Meeting summaries (source data; compare current with historical)',
     meetingsText,
-    '',
-    tasksText
-  ].join('\n');
-  const body = await generate(system, user);
-  return wrapWeeklyHtml(body, rangeLabel, buildMeetingSourceLine(meetings));
+    '# Supporting task context (source data)',
+    sanitizeDigestSourceText(tasks) || '(No task context available)'
+  ].join('\n\n');
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const retry = lastError ? `\n\nPrevious draft failed validation: ${lastError.message}. Regenerate from the same sources.` : '';
+    const response = await generateText(system, user + retry);
+    try {
+      const body = renderWeeklyBrief(extractJson(response), allMeetings, usableMeetings.length);
+      return body ? wrapWeeklyHtml(body, rangeLabel, buildMeetingSourceLine(usableMeetings)) : null;
+    } catch (error) {
+      lastError = error;
+      console.warn(`Weekly digest draft ${attempt}/3 failed validation: ${error.message}`);
+    }
+  }
+  throw new Error(`Weekly digest failed validation after 3 attempts: ${lastError.message}`);
 }

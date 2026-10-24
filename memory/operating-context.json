@@ -1,0 +1,26 @@
+{
+  "updatedAt": "2026-10-24",
+  "entries": [
+    {
+      "id": "a16z-paid-customer",
+      "asOf": "2026-10-24",
+      "kind": "confirmed_fact",
+      "source": "Sam's direct correction, October 24, 2026",
+      "statement": "a16z is already a paying customer. The first-paid-customer milestone is complete; the old $10K-by-May target is retired. Do not reopen it or reclassify a16z to exclude it."
+    },
+    {
+      "id": "a16z-rate-objection",
+      "asOf": "2026-10-24",
+      "kind": "owner_correction",
+      "source": "Sam's direct correction, October 24, 2026",
+      "statement": "Erik balked at the engagement rate. Sam maintains that the rate is defensible. This is not DB acknowledging that the rate is indefensible. Distinguish buyer objection from seller concession."
+    },
+    {
+      "id": "brief-purpose",
+      "asOf": "2026-10-24",
+      "kind": "editorial_preference",
+      "source": "Sam's direct feedback, October 24, 2026",
+      "statement": "Sam runs these meetings and does not want a weekly recap or condescending coaching. Build on prior context, distinguish developments from repeated discussion, and add concrete thinking that reduces decision effort."
+    }
+  ]
+}

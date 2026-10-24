@@ -1,3 +1,4 @@
+import { selectHistoricalNotes } from './memory.js';
 import { getStartOfToday, isDigestMonday } from './time.js';
 
 const BASE_URL = 'https://public-api.granola.ai/v1';
@@ -109,4 +110,18 @@ export async function fetchLatestSamUpdate(day = new Date()) {
   return details
     .filter(note => noteText(note).includes('#samsupdate'))
     .sort((a, b) => noteTimestamp(b) - noteTimestamp(a))[0] || null;
+}
+
+export async function fetchHistoricalMeetings({ before, currentIds = [] }) {
+  // Retrieve metadata across the available archive, not just the last week.
+  const notes = filterTSLMeetings(await fetchNotes(new Date('1970-01-01T00:00:00Z')));
+  const selected = selectHistoricalNotes(notes, { before, currentIds });
+  const meetings = [];
+  // Bound detail-call concurrency; a failed read must not silently erase memory.
+  for (let index = 0; index < selected.length; index += 4) {
+    const details = await Promise.all(selected.slice(index, index + 4).map(note => fetchNoteDetail(note.id)));
+    meetings.push(...details.filter(note => note.summary_markdown?.trim()));
+  }
+  console.log(`Retrieved ${meetings.length} historical meeting sources from ${notes.length} archived TSL notes.`);
+  return meetings;
 }

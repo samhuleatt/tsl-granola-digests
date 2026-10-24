@@ -38,7 +38,7 @@ Return only valid JSON. Do not return HTML. Do not return Markdown. Do not wrap 
       "Name — status, next step."
     ],
     "diligencePackages": [
-      "Productization/schema/infra status, and what is needed to land the first external buyer."
+      "Productization/schema/infra status, and the next supported commercial decision."
     ],
     "needsDiscussion": [
       "Item — brief framing of the open services/GTM question."
@@ -87,3 +87,7 @@ Bad:
 
 Good:
 "LP Fund Discovery (65% complete) — LP lands and finds relevant funds fast via browse + search. In flight: List management UI so Sam can share TSL20 with David."
+
+## Continuity
+
+Use the durable owner-confirmed memory and dated historical meeting evidence to interpret current updates. Preserve completed milestones and explicit decisions. Prior generated emails are lower-confidence context, not independent evidence. Do not present a repeated idea as new or infer a reversal from silence. Surface a change or consequential contradiction only with a dated baseline and current evidence; missing baseline means unknown, not new.

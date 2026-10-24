@@ -1,4 +1,5 @@
-import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail } from './granola.js';
+import { writeFileSync } from 'fs';
+import { fetchWeeksMeetings, filterTSLMeetings, fetchNoteDetail, fetchHistoricalMeetings } from './granola.js';
 import { generateWeeklyDigest } from './claude.js';
 import { sendEmail } from './resend.js';
 import { formatDailyStorageDate, formatWeekendRoundupDate, getDigestHour, getDigestWeekday, isWeekendDigestSendWindow } from './time.js';
@@ -49,18 +50,29 @@ async function main() {
     })
   );
 
+  const historicalMeetings = await fetchHistoricalMeetings({
+    before: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    currentIds: meetings.map(meeting => meeting.id)
+  });
+
   // 5. Generate digest HTML via Claude
   console.log('Generating weekly digest with Claude...');
   const today = new Date();
   const roundupDate = formatWeekendRoundupDate(today);
   const heading = `TSL Weekend Roundup — ${roundupDate}`;
-  const html = await generateWeeklyDigest({ meetings, tasks, rangeLabel: heading });
+  const html = await generateWeeklyDigest({ meetings, tasks, historicalMeetings, rangeLabel: heading });
+
+  if (!html) {
+    console.log('No additional decision-useful points supported by the sources; skipping weekly email.');
+    return;
+  }
 
   // 6. Build subject and send
   const subject = heading;
   console.log(`Subject: ${subject}`);
 
   if (process.env.SEND_DIGEST_EMAIL !== 'true') {
+    if (process.env.DIGEST_PREVIEW_PATH) writeFileSync(process.env.DIGEST_PREVIEW_PATH, html);
     console.log('Dry run complete; SEND_DIGEST_EMAIL is not true, so no email was sent.');
     return;
   }
