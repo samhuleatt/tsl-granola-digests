@@ -41,7 +41,7 @@ export function isWeekendDigestDay(date = new Date()) {
 export function getDigestHour(date = new Date()) {
   return Number(formatInTimeZone(date, {
     hour: 'numeric',
-    hour12: false
+    hourCycle: 'h23'
   }));
 }
 
